@@ -5,7 +5,7 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:camera_platform_interface/camera_platform_interface.dart';
+import 'package:camera_platform_interface_frame/camera_platform_interface_frame.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -18,8 +18,7 @@ import 'utils.dart';
 /// An iOS implementation of [CameraPlatform] based on AVFoundation.
 class AVFoundationCamera extends CameraPlatform {
   /// Creates a new AVFoundation-based [CameraPlatform] implementation instance.
-  AVFoundationCamera({@visibleForTesting CameraApi? api})
-      : _hostApi = api ?? CameraApi();
+  AVFoundationCamera({@visibleForTesting CameraApi? api}) : _hostApi = api ?? CameraApi();
 
   /// Registers this class as the default instance of [CameraPlatform].
   static void registerWith() {
@@ -37,8 +36,7 @@ class AVFoundationCamera extends CameraPlatform {
   /// This is only exposed for test purposes. It shouldn't be used by clients of
   /// the plugin as it may break or change at any time.
   @visibleForTesting
-  final StreamController<CameraEvent> cameraEventStreamController =
-      StreamController<CameraEvent>.broadcast();
+  final StreamController<CameraEvent> cameraEventStreamController = StreamController<CameraEvent>.broadcast();
 
   /// The handler for device-level messages that should be rebroadcast to
   /// clients as [DeviceEvent]s.
@@ -51,8 +49,7 @@ class AVFoundationCamera extends CameraPlatform {
   /// The per-camera handlers for messages that should be rebroadcast to
   /// clients as [CameraEvent]s.
   @visibleForTesting
-  final Map<int, HostCameraMessageHandler> hostCameraHandlers =
-      <int, HostCameraMessageHandler>{};
+  final Map<int, HostCameraMessageHandler> hostCameraHandlers = <int, HostCameraMessageHandler>{};
 
   // The stream to receive frames from the native code.
   StreamSubscription<dynamic>? _platformImageStreamSubscription;
@@ -61,15 +58,12 @@ class AVFoundationCamera extends CameraPlatform {
   StreamController<CameraImageData>? _frameStreamController;
 
   Stream<CameraEvent> _cameraEvents(int cameraId) =>
-      cameraEventStreamController.stream
-          .where((CameraEvent event) => event.cameraId == cameraId);
+      cameraEventStreamController.stream.where((CameraEvent event) => event.cameraId == cameraId);
 
   @override
   Future<List<CameraDescription>> availableCameras() async {
     try {
-      return (await _hostApi.getAvailableCameras())
-          .map(cameraDescriptionFromPlatform)
-          .toList();
+      return (await _hostApi.getAvailableCameras()).map(cameraDescriptionFromPlatform).toList();
     } on PlatformException catch (e) {
       throw CameraException(e.code, e.message);
     }
@@ -97,8 +91,7 @@ class AVFoundationCamera extends CameraPlatform {
       return await _hostApi.create(
           cameraDescription.name,
           PlatformMediaSettings(
-            resolutionPreset:
-                _pigeonResolutionPreset(mediaSettings?.resolutionPreset),
+            resolutionPreset: _pigeonResolutionPreset(mediaSettings?.resolutionPreset),
             framesPerSecond: mediaSettings?.fps,
             videoBitrate: mediaSettings?.videoBitrate,
             audioBitrate: mediaSettings?.audioBitrate,
@@ -114,14 +107,11 @@ class AVFoundationCamera extends CameraPlatform {
     int cameraId, {
     ImageFormatGroup imageFormatGroup = ImageFormatGroup.unknown,
   }) async {
-    hostCameraHandlers.putIfAbsent(cameraId,
-        () => HostCameraMessageHandler(cameraId, cameraEventStreamController));
+    hostCameraHandlers.putIfAbsent(cameraId, () => HostCameraMessageHandler(cameraId, cameraEventStreamController));
 
     final Completer<void> completer = Completer<void>();
 
-    unawaited(onCameraInitialized(cameraId)
-        .first
-        .then((CameraInitializedEvent value) {
+    unawaited(onCameraInitialized(cameraId).first.then((CameraInitializedEvent value) {
       completer.complete();
     }));
 
@@ -139,8 +129,7 @@ class AVFoundationCamera extends CameraPlatform {
 
   @override
   Future<void> dispose(int cameraId) async {
-    final HostCameraMessageHandler? handler =
-        hostCameraHandlers.remove(cameraId);
+    final HostCameraMessageHandler? handler = hostCameraHandlers.remove(cameraId);
     handler?.dispose();
 
     await _hostApi.dispose(cameraId);
@@ -173,8 +162,7 @@ class AVFoundationCamera extends CameraPlatform {
 
   @override
   Stream<DeviceOrientationChangedEvent> onDeviceOrientationChanged() {
-    return hostHandler.deviceEventStreamController.stream
-        .whereType<DeviceOrientationChangedEvent>();
+    return hostHandler.deviceEventStreamController.stream.whereType<DeviceOrientationChangedEvent>();
   }
 
   @override
@@ -182,8 +170,7 @@ class AVFoundationCamera extends CameraPlatform {
     int cameraId,
     DeviceOrientation orientation,
   ) async {
-    await _hostApi
-        .lockCaptureOrientation(serializeDeviceOrientation(orientation));
+    await _hostApi.lockCaptureOrientation(serializeDeviceOrientation(orientation));
   }
 
   @override
@@ -203,8 +190,7 @@ class AVFoundationCamera extends CameraPlatform {
   }
 
   @override
-  Future<void> startVideoRecording(int cameraId,
-      {Duration? maxVideoDuration}) async {
+  Future<void> startVideoRecording(int cameraId, {Duration? maxVideoDuration}) async {
     // Ignore maxVideoDuration, as it is unimplemented and deprecated.
     return startVideoCapturing(VideoCaptureOptions(cameraId));
   }
@@ -241,15 +227,12 @@ class AVFoundationCamera extends CameraPlatform {
   bool supportsImageStreaming() => true;
 
   @override
-  Stream<CameraImageData> onStreamedFrameAvailable(int cameraId,
-      {CameraImageStreamOptions? options}) {
-    _frameStreamController =
-        _createStreamController(onListen: _onFrameStreamListen);
+  Stream<CameraImageData> onStreamedFrameAvailable(int cameraId, {CameraImageStreamOptions? options}) {
+    _frameStreamController = _createStreamController(onListen: _onFrameStreamListen);
     return _frameStreamController!.stream;
   }
 
-  StreamController<CameraImageData> _createStreamController(
-      {void Function()? onListen}) {
+  StreamController<CameraImageData> _createStreamController({void Function()? onListen}) {
     return StreamController<CameraImageData>(
       onListen: onListen ?? () {},
       onPause: _onFrameStreamPauseResume,
@@ -268,17 +251,14 @@ class AVFoundationCamera extends CameraPlatform {
   }
 
   void _startStreamListener() {
-    const EventChannel cameraEventChannel =
-        EventChannel('plugins.flutter.io/camera_avfoundation/imageStream');
-    _platformImageStreamSubscription =
-        cameraEventChannel.receiveBroadcastStream().listen((dynamic imageData) {
+    const EventChannel cameraEventChannel = EventChannel('plugins.flutter.io/camera_avfoundation/imageStream');
+    _platformImageStreamSubscription = cameraEventChannel.receiveBroadcastStream().listen((dynamic imageData) {
       try {
         _hostApi.receivedImageStreamData();
       } on PlatformException catch (e) {
         throw CameraException(e.code, e.message);
       }
-      _frameStreamController!
-          .add(cameraImageFromPlatformData(imageData as Map<dynamic, dynamic>));
+      _frameStreamController!.add(cameraImageFromPlatformData(imageData as Map<dynamic, dynamic>));
     });
   }
 
@@ -290,8 +270,7 @@ class AVFoundationCamera extends CameraPlatform {
   }
 
   void _onFrameStreamPauseResume() {
-    throw CameraException('InvalidCall',
-        'Pause and resume are not supported for onStreamedFrameAvailable');
+    throw CameraException('InvalidCall', 'Pause and resume are not supported for onStreamedFrameAvailable');
   }
 
   @override
@@ -380,8 +359,7 @@ class AVFoundationCamera extends CameraPlatform {
   }
 
   @override
-  Future<void> setDescriptionWhileRecording(
-      CameraDescription description) async {
+  Future<void> setDescriptionWhileRecording(CameraDescription description) async {
     await _hostApi.updateDescriptionWhileRecording(description.name);
   }
 
@@ -451,8 +429,7 @@ class AVFoundationCamera extends CameraPlatform {
   }
 
   /// Returns a [ResolutionPreset]'s Pigeon representation.
-  PlatformResolutionPreset _pigeonResolutionPreset(
-      ResolutionPreset? resolutionPreset) {
+  PlatformResolutionPreset _pigeonResolutionPreset(ResolutionPreset? resolutionPreset) {
     if (resolutionPreset == null) {
       // Provide a default if one isn't provided, since the native side needs
       // to set something.
@@ -547,13 +524,11 @@ class HostDeviceMessageHandler implements CameraGlobalEventApi {
   ///
   /// It is a `broadcast` because multiple controllers will connect to
   /// different stream views of this Controller.
-  final StreamController<DeviceEvent> deviceEventStreamController =
-      StreamController<DeviceEvent>.broadcast();
+  final StreamController<DeviceEvent> deviceEventStreamController = StreamController<DeviceEvent>.broadcast();
 
   @override
   void deviceOrientationChanged(PlatformDeviceOrientation orientation) {
-    deviceEventStreamController.add(DeviceOrientationChangedEvent(
-        deviceOrientationFromPlatform(orientation)));
+    deviceEventStreamController.add(DeviceOrientationChangedEvent(deviceOrientationFromPlatform(orientation)));
   }
 }
 
