@@ -208,6 +208,11 @@ abstract class CameraApi {
   @async
   String takePicture();
 
+  @async
+  @ObjCSelector('capturePreviewFrameJpegOutputPath:')
+  String capturePreviewFrameJpeg(String outputPath);
+
+
   /// Does any preprocessing necessary before beginning to record video.
   @async
   void prepareForVideoRecording();

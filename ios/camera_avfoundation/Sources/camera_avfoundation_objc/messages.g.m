@@ -632,6 +632,25 @@ void SetUpFCPCameraApiWithSuffix(id<FlutterBinaryMessenger> binaryMessenger, NSO
       [channel setMessageHandler:nil];
     }
   }
+  {
+    FlutterBasicMessageChannel *channel =
+      [[FlutterBasicMessageChannel alloc]
+        initWithName:[NSString stringWithFormat:@"%@%@", @"dev.flutter.pigeon.camera_avfoundation_frame.CameraApi.capturePreviewFrameJpeg", messageChannelSuffix]
+        binaryMessenger:binaryMessenger
+        codec:FCPGetMessagesCodec()];
+    if (api) {
+      NSCAssert([api respondsToSelector:@selector(capturePreviewFrameJpegOutputPath:completion:)], @"FCPCameraApi api (%@) doesn't respond to @selector(capturePreviewFrameJpegOutputPath:completion:)", api);
+      [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
+        NSArray<id> *args = message;
+        NSString *arg_outputPath = GetNullableObjectAtIndex(args, 0);
+        [api capturePreviewFrameJpegOutputPath:arg_outputPath completion:^(NSString *_Nullable output, FlutterError *_Nullable error) {
+          callback(wrapResult(output, error));
+        }];
+      }];
+    } else {
+      [channel setMessageHandler:nil];
+    }
+  }
   /// Does any preprocessing necessary before beginning to record video.
   {
     FlutterBasicMessageChannel *channel =

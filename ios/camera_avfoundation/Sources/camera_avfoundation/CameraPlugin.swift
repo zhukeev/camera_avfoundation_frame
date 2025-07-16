@@ -365,6 +365,14 @@ extension CameraPlugin: FCPCameraApi {
     }
   }
 
+  public func capturePreviewFrameJpegOutputPath(
+  _ outputPath: String,
+  completion: @escaping (String?, FlutterError?) -> Void
+) {
+}
+
+
+
   public func prepareForVideoRecording(completion: @escaping (FlutterError?) -> Void) {
     captureSessionQueue.async { [weak self] in
       self?.camera?.setUpCaptureSessionForAudioIfNeeded()
