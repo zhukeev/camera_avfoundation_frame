@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:camera_avfoundation/camera_avfoundation.dart';
+import 'package:camera_avfoundation_frame/camera_avfoundation_frame.dart';
 import 'package:camera_example/camera_controller.dart';
 import 'package:camera_platform_interface_frame/camera_platform_interface_frame.dart';
 import 'package:flutter/painting.dart';
