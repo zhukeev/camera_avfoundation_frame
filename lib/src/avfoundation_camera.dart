@@ -183,6 +183,12 @@ class AVFoundationCamera extends CameraPlatform {
     final String path = await _hostApi.takePicture();
     return XFile(path);
   }
+  
+  @override
+  Future<XFile> capturePreviewFrameJpeg(String outputPath) async {
+    final String path = await _hostApi.capturePreviewFrameJpeg(outputPath);
+    return XFile(path);
+  }
 
   @override
   Future<void> prepareForVideoRecording() async {

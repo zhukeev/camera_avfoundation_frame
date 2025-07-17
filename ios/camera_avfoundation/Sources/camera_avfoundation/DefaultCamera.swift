@@ -553,6 +553,67 @@ final class DefaultCamera: FLTCam, Camera {
       }
     }
   }
+    func capturePreviewFrameJpeg(
+      outputPath: String, completion: @escaping (String?, FlutterError?) -> Void
+    ) {
+      guard let pixelBuffer = copyPixelBuffer()?.takeRetainedValue() else {
+        print("⚠️ No pixel buffer available")
+        completion(nil, FlutterError(code: "no_image", message: "No image available", details: nil))
+        return
+      }
+
+      let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+      let context = CIContext()
+
+      guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
+        completion(
+          nil, FlutterError(code: "colorSpace", message: "Unable to create color space", details: nil))
+        return
+      }
+
+      guard
+        let cgImage = context.createCGImage(
+          ciImage, from: ciImage.extent, format: .RGBA8, colorSpace: colorSpace)
+      else {
+        completion(
+          nil, FlutterError(code: "convert_failed", message: "Unable to convert image", details: nil))
+        return
+      }
+
+      let uiImage = UIImage(cgImage: cgImage)
+
+      guard let jpegData = uiImage.jpegData(compressionQuality: 0.9) else {
+        completion(
+          nil, FlutterError(code: "jpeg_encode", message: "Failed to encode image", details: nil))
+        return
+      }
+
+      do {
+        try jpegData.write(to: URL(fileURLWithPath: outputPath))
+        completion(outputPath, nil)
+      } catch {
+        completion(
+          nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
+      }
+    }
+
+    func setUpCaptureSessionForVideoIfNeeded() {
+      guard !videoCaptureSession.outputs.contains(where: { $0 is AVCaptureVideoDataOutput }) else {
+        return
+      }
+
+      let videoDataOutput = AVCaptureVideoDataOutput()
+      videoDataOutput.videoSettings = [
+        (kCVPixelBufferPixelFormatTypeKey as String): Int(videoFormat)
+      ]
+      videoDataOutput.setSampleBufferDelegate(self, queue: pixelBufferSynchronizationQueue)
+
+      if videoCaptureSession.canAddOutput(videoDataOutput) {
+        videoCaptureSession.addOutput(videoDataOutput)
+      }
+    }
+
+
 
   func close() {
     stop()

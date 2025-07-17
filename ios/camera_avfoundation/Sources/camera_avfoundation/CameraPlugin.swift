@@ -300,7 +300,7 @@ extension CameraPlugin: FCPCameraApi {
       binaryMessenger: messenger,
       messageChannelSuffix: "\(cameraId)"
     )
-
+    camera.setUpCaptureSessionForVideoIfNeeded()
     camera.reportInitializationState()
     sendDeviceOrientation(UIDevice.current.orientation)
     camera.start()
@@ -368,9 +368,11 @@ extension CameraPlugin: FCPCameraApi {
   public func capturePreviewFrameJpegOutputPath(
   _ outputPath: String,
   completion: @escaping (String?, FlutterError?) -> Void
-) {
-}
-
+  ) {
+    captureSessionQueue.async { [weak self] in
+      self?.camera?.capturePreviewFrameJpeg(outputPath: outputPath, completion: completion)
+    }
+  }
 
 
   public func prepareForVideoRecording(completion: @escaping (FlutterError?) -> Void) {

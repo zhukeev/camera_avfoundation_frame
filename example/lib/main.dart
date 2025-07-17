@@ -10,6 +10,7 @@ import 'package:camera_platform_interface_frame/camera_platform_interface_frame.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
 import 'camera_controller.dart';
@@ -170,6 +171,10 @@ class _CameraExampleHomeState extends State<CameraExampleHome> with WidgetsBindi
   /// Display the preview from the camera (or a message if the preview is not available).
   Widget _cameraPreviewWidget() {
     final CameraController? cameraController = controller;
+
+    if (imageFile != null) {
+      return Image.file(File(imageFile!.path));
+    }
 
     if (cameraController == null || !cameraController.value.isInitialized) {
       return const Text(
@@ -958,8 +963,18 @@ class _CameraExampleHomeState extends State<CameraExampleHome> with WidgetsBindi
     }
 
     try {
-      final XFile file = await cameraController.takePicture();
-      return file;
+      // final XFile file = await cameraController.takePicture();
+      // print('takePicture took ${sw1p.elapsedMilliseconds} ms ${file.path}');
+      // sw1p.reset();
+      final Directory tempDir = await getTemporaryDirectory();
+      final filePath = '${tempDir.path}/flutter_test_${DateTime.now()}.jpg';
+      final sw1p = Stopwatch()..start();
+
+      final XFile file2 = await cameraController.caputureFrameJpeg(filePath);
+      print('caputureJpeg took ${sw1p.elapsedMilliseconds} ms ${file2.path}');
+      sw1p.stop();
+
+      return file2;
     } on CameraException catch (e) {
       _showCameraException(e);
       return null;

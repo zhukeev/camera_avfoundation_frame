@@ -297,6 +297,14 @@ class CameraController extends ValueNotifier<CameraValue> {
     return file;
   }
 
+  /// Captures an image and returns the file where it was saved.
+  ///
+  /// Throws a [CameraException] if the capture fails.
+  Future<XFile> caputureFrameJpeg(String path) async {
+    final XFile file = await CameraPlatform.instance.capturePreviewFrameJpeg(path);
+    return file;
+  }
+
   /// Start streaming images from platform camera.
   Future<void> startImageStream(void Function(CameraImageData image) onAvailable) async {
     _imageStreamSubscription =
