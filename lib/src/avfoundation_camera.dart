@@ -191,6 +191,13 @@ class AVFoundationCamera extends CameraPlatform {
   }
 
   @override
+  Future<CameraImageData> capturePreviewFrame() async {
+    final dynamic imageData = await _hostApi.capturePreviewFrame();
+
+    return cameraImageFromPlatformData(imageData as Map<dynamic, dynamic>);
+  }
+
+  @override
   Future<void> prepareForVideoRecording() async {
     await _hostApi.prepareForVideoRecording();
   }

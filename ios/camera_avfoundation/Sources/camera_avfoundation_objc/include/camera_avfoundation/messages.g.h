@@ -215,6 +215,7 @@ NSObject<FlutterMessageCodec> *FCPGetMessagesCodec(void);
 /// resulting file.
 - (void)takePictureWithCompletion:(void (^)(NSString *_Nullable, FlutterError *_Nullable))completion;
 - (void)capturePreviewFrameJpegOutputPath:(NSString *)outputPath completion:(void (^)(NSString *_Nullable, FlutterError *_Nullable))completion;
+- (void)capturePreviewFrameWithCompletion:(void (^)(NSDictionary<NSString *, id> *_Nullable, FlutterError *_Nullable))completion;
 /// Does any preprocessing necessary before beginning to record video.
 - (void)prepareForVideoRecordingWithCompletion:(void (^)(FlutterError *_Nullable))completion;
 /// Begins recording video, optionally enabling streaming to Dart at the same

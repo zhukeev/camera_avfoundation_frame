@@ -553,67 +553,125 @@ final class DefaultCamera: FLTCam, Camera {
       }
     }
   }
-    func capturePreviewFrameJpeg(
-      outputPath: String, completion: @escaping (String?, FlutterError?) -> Void
-    ) {
-      guard let pixelBuffer = copyPixelBuffer()?.takeRetainedValue() else {
-        print("⚠️ No pixel buffer available")
-        completion(nil, FlutterError(code: "no_image", message: "No image available", details: nil))
-        return
-      }
 
-      let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-      let context = CIContext()
+  func capturePreviewFrame(completion: @escaping ([String: Any]?, FlutterError?) -> Void) {
 
-      guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
-        completion(
-          nil, FlutterError(code: "colorSpace", message: "Unable to create color space", details: nil))
-        return
-      }
-
-      guard
-        let cgImage = context.createCGImage(
-          ciImage, from: ciImage.extent, format: .RGBA8, colorSpace: colorSpace)
-      else {
-        completion(
-          nil, FlutterError(code: "convert_failed", message: "Unable to convert image", details: nil))
-        return
-      }
-
-      let uiImage = UIImage(cgImage: cgImage)
-
-      guard let jpegData = uiImage.jpegData(compressionQuality: 0.9) else {
-        completion(
-          nil, FlutterError(code: "jpeg_encode", message: "Failed to encode image", details: nil))
-        return
-      }
-
-      do {
-        try jpegData.write(to: URL(fileURLWithPath: outputPath))
-        completion(outputPath, nil)
-      } catch {
-        completion(
-          nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
-      }
+    guard let pixelBuffer = copyPixelBuffer()?.takeRetainedValue() else {
+      completion(nil, FlutterError(code: "no_image", message: "No image available", details: nil))
+      return
     }
 
-    func setUpCaptureSessionForVideoIfNeeded() {
-      guard !videoCaptureSession.outputs.contains(where: { $0 is AVCaptureVideoDataOutput }) else {
-        return
+    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+
+    let width = CVPixelBufferGetWidth(pixelBuffer)
+    let height = CVPixelBufferGetHeight(pixelBuffer)
+    let format = videoFormat  // FourCC Int32
+
+    var planes: [[String: Any]] = []
+
+    let isPlanar = CVPixelBufferIsPlanar(pixelBuffer)
+    let planeCount = isPlanar ? CVPixelBufferGetPlaneCount(pixelBuffer) : 1
+
+    for i in 0..<planeCount {
+      let baseAddress: UnsafeMutableRawPointer?
+      let bytesPerRow: Int
+      let planeWidth: Int
+      let planeHeight: Int
+
+      if isPlanar {
+        baseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, i)
+        bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, i)
+        planeWidth = CVPixelBufferGetWidthOfPlane(pixelBuffer, i)
+        planeHeight = CVPixelBufferGetHeightOfPlane(pixelBuffer, i)
+      } else {
+        baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer)
+        bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        planeWidth = width
+        planeHeight = height
       }
 
-      let videoDataOutput = AVCaptureVideoDataOutput()
-      videoDataOutput.videoSettings = [
-        (kCVPixelBufferPixelFormatTypeKey as String): Int(videoFormat)
-      ]
-      videoDataOutput.setSampleBufferDelegate(self, queue: pixelBufferSynchronizationQueue)
+      let length = bytesPerRow * planeHeight
+      let data = Data(bytes: baseAddress!, count: length)
 
-      if videoCaptureSession.canAddOutput(videoDataOutput) {
-        videoCaptureSession.addOutput(videoDataOutput)
-      }
+      planes.append([
+        "bytesPerRow": bytesPerRow,
+        "width": planeWidth,
+        "height": planeHeight,
+        "bytes": FlutterStandardTypedData(bytes: data),
+      ])
     }
 
+    CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
 
+    let result: [String: Any] = [
+      "width": width,
+      "height": height,
+      "format": format,
+      "planes": planes,
+    ]
+
+    completion(result, nil)
+  }
+
+  func capturePreviewFrameJpeg(
+    outputPath: String, completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    guard let pixelBuffer = copyPixelBuffer()?.takeRetainedValue() else {
+      completion(nil, FlutterError(code: "no_image", message: "No image available", details: nil))
+      return
+    }
+
+    let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+    let context = CIContext()
+
+    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
+      completion(
+        nil, FlutterError(code: "colorSpace", message: "Unable to create color space", details: nil)
+      )
+      return
+    }
+
+    guard
+      let cgImage = context.createCGImage(
+        ciImage, from: ciImage.extent, format: .RGBA8, colorSpace: colorSpace)
+    else {
+      completion(
+        nil, FlutterError(code: "convert_failed", message: "Unable to convert image", details: nil))
+      return
+    }
+
+    let uiImage = UIImage(cgImage: cgImage)
+
+    guard let jpegData = uiImage.jpegData(compressionQuality: 0.9) else {
+      completion(
+        nil, FlutterError(code: "jpeg_encode", message: "Failed to encode image", details: nil))
+      return
+    }
+
+    do {
+      try jpegData.write(to: URL(fileURLWithPath: outputPath))
+      completion(outputPath, nil)
+    } catch {
+      completion(
+        nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  func setUpCaptureSessionForVideoIfNeeded() {
+    guard !videoCaptureSession.outputs.contains(where: { $0 is AVCaptureVideoDataOutput }) else {
+      return
+    }
+
+    let videoDataOutput = AVCaptureVideoDataOutput()
+    videoDataOutput.videoSettings = [
+      (kCVPixelBufferPixelFormatTypeKey as String): Int(videoFormat)
+    ]
+    videoDataOutput.setSampleBufferDelegate(self, queue: pixelBufferSynchronizationQueue)
+
+    if videoCaptureSession.canAddOutput(videoDataOutput) {
+      videoCaptureSession.addOutput(videoDataOutput)
+    }
+  }
 
   func close() {
     stop()
@@ -632,14 +690,74 @@ final class DefaultCamera: FLTCam, Camera {
   }
 
   func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
-    var pixelBuffer: CVPixelBuffer?
+    var copied: CVPixelBuffer?
+
     pixelBufferSynchronizationQueue.sync {
-      pixelBuffer = latestPixelBuffer
-      latestPixelBuffer = nil
+      guard let src = latestPixelBuffer else {
+        return
+      }
+
+      let width = CVPixelBufferGetWidth(src)
+      let height = CVPixelBufferGetHeight(src)
+      let pixelFormat = CVPixelBufferGetPixelFormatType(src)
+
+      let attrs: CFDictionary =
+        [
+          kCVPixelBufferIOSurfacePropertiesKey: [:]
+        ] as CFDictionary
+
+      var dst: CVPixelBuffer?
+      let status = CVPixelBufferCreate(
+        nil,
+        width,
+        height,
+        pixelFormat,
+        attrs,
+        &dst
+      )
+
+      guard status == kCVReturnSuccess, let dstBuffer = dst else {
+        return
+      }
+
+      CVPixelBufferLockBaseAddress(src, .readOnly)
+      CVPixelBufferLockBaseAddress(dstBuffer, [])
+
+      let isPlanar = CVPixelBufferIsPlanar(src)
+      let planeCount = isPlanar ? CVPixelBufferGetPlaneCount(src) : 1
+
+      for i in 0..<planeCount {
+        let srcPtr =
+          isPlanar
+          ? CVPixelBufferGetBaseAddressOfPlane(src, i)
+          : CVPixelBufferGetBaseAddress(src)
+
+        let dstPtr =
+          isPlanar
+          ? CVPixelBufferGetBaseAddressOfPlane(dstBuffer, i)
+          : CVPixelBufferGetBaseAddress(dstBuffer)
+
+        let height =
+          isPlanar
+          ? CVPixelBufferGetHeightOfPlane(src, i)
+          : CVPixelBufferGetHeight(src)
+
+        let bytesPerRow =
+          isPlanar
+          ? CVPixelBufferGetBytesPerRowOfPlane(src, i)
+          : CVPixelBufferGetBytesPerRow(src)
+
+        memcpy(dstPtr, srcPtr, height * bytesPerRow)
+      }
+
+      CVPixelBufferUnlockBaseAddress(dstBuffer, [])
+      CVPixelBufferUnlockBaseAddress(src, .readOnly)
+
+      copied = dstBuffer
     }
 
-    if let buffer = pixelBuffer {
-      return Unmanaged.passRetained(buffer)
+    if let c = copied {
+      return Unmanaged.passRetained(c)
     } else {
       return nil
     }
