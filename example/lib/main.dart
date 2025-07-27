@@ -5,7 +5,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'package:image/image.dart' as imglib;
 import 'package:camera_platform_interface_frame/camera_platform_interface_frame.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -973,16 +972,14 @@ class _CameraExampleHomeState extends State<CameraExampleHome> with WidgetsBindi
       File(filePath).createSync();
       file = XFile(filePath);
 
-
       final sw1p = Stopwatch()..start();
 
       print('caputureJpeg requested');
-
       final XFile file2 = await cameraController.caputureFrameJpeg(filePath);
-      // print('caputureJpeg took ${sw1p.elapsedMilliseconds} ms ${file2.path}');
+      print('caputureJpeg took ${sw1p.elapsedMilliseconds} ms ${file2.path}');
       sw1p.reset();
 
-      final cameraImage = await cameraController.caputureFrame();
+      // final cameraImage = await cameraController.caputureFrame();
       // print('caputureFrame took ${sw1p.elapsedMilliseconds} ms ${file2.path}');
 
       sw1p.reset();
@@ -991,7 +988,7 @@ class _CameraExampleHomeState extends State<CameraExampleHome> with WidgetsBindi
       //   return null;
       // }
 
-      final convertedImage = _convertBGRA8888ToImage(cameraImage);
+      // final convertedImage = _convertBGRA8888ToImage(cameraImage);
 
       print('convertImgToBytes took ${sw1p.elapsedMilliseconds} ms ${file.path}');
 
@@ -1007,51 +1004,6 @@ class _CameraExampleHomeState extends State<CameraExampleHome> with WidgetsBindi
       _showCameraException(e);
       return null;
     }
-  }
-
-  Uint8List _concatenatePlanes(CameraImageData image) {
-    int length = 0;
-    for (final CameraImagePlane p in image.planes) {
-      length += p.bytes.length;
-    }
-
-    final Uint8List bytes = Uint8List(length);
-    int offset = 0;
-    for (final CameraImagePlane p in image.planes) {
-      bytes.setRange(offset, offset + p.bytes.length, p.bytes);
-      offset += p.bytes.length;
-    }
-    return bytes;
-  }
-
-  static imglib.Image _convertBGRA8888ToImage(CameraImageData cameraImage) {
-    final plane = cameraImage.planes[0];
-    print(
-        "Plane: rowStride=${plane.bytesPerRow}, length=${plane.bytes.length}, width=${cameraImage.width}, height=${cameraImage.height}");
-
-    final imageBytes = Uint8List.sublistView(
-      plane.bytes.buffer.asUint8List(),
-      plane.bytes.offsetInBytes,
-      plane.bytes.offsetInBytes + plane.bytes.lengthInBytes,
-    );
-
-    return imglib.Image.fromBytes(
-      width: cameraImage.width,
-      height: cameraImage.height,
-      bytes: imageBytes.buffer,
-      bytesOffset: 28,
-      rowStride: plane.bytesPerRow,
-      order: imglib.ChannelOrder.bgra,
-    );
-
-    return imglib.Image.fromBytes(
-      width: cameraImage.width,
-      height: cameraImage.height,
-      bytes: plane.bytes.buffer,
-      rowStride: plane.bytesPerRow,
-      bytesOffset: 28,
-      order: imglib.ChannelOrder.bgra,
-    );
   }
 
   void _showCameraException(CameraException e) {
