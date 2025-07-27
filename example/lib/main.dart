@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+
 import 'package:camera_platform_interface_frame/camera_platform_interface_frame.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -979,18 +980,15 @@ class _CameraExampleHomeState extends State<CameraExampleHome> with WidgetsBindi
       print('caputureJpeg took ${sw1p.elapsedMilliseconds} ms ${file2.path}');
       sw1p.reset();
 
-      // final cameraImage = await cameraController.caputureFrame();
-      // print('caputureFrame took ${sw1p.elapsedMilliseconds} ms ${file2.path}');
+      final cameraImage = await cameraController.caputureFrame();
+      print('caputureFrame took ${sw1p.elapsedMilliseconds} ms');
 
       sw1p.reset();
 
-      // if (bytes == null) {
-      //   return null;
-      // }
+      final savedFile = await cameraController.saveAsJpeg(cameraImage, filePath, 180);
+      print('saveAsJpeg took ${sw1p.elapsedMilliseconds} ms  format ${cameraImage.format.raw}');
 
-      // final convertedImage = _convertBGRA8888ToImage(cameraImage);
-
-      print('convertImgToBytes took ${sw1p.elapsedMilliseconds} ms ${file.path}');
+      sw1p.reset();
 
       // file2.writeAsBytesSync(bytes);
       // if (convertedImage != null) {

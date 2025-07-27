@@ -190,6 +190,12 @@ class AVFoundationCamera extends CameraPlatform {
     return XFile(path);
   }
 
+  Future<XFile> saveJpegAsJpeg(String outputPath, CameraImageData imageData, [int rotation = 0]) async {
+    final dynamic platformImageData = cameraImageToPlatformData(imageData);
+    final String path = await _hostApi.saveJpegAsJpeg(platformImageData, outputPath, rotation);
+    return XFile(path);
+  }
+
   @override
   Future<CameraImageData> capturePreviewFrame() async {
     final dynamic imageData = await _hostApi.capturePreviewFrame();

@@ -654,6 +654,27 @@ void SetUpFCPCameraApiWithSuffix(id<FlutterBinaryMessenger> binaryMessenger, NSO
   {
     FlutterBasicMessageChannel *channel =
       [[FlutterBasicMessageChannel alloc]
+        initWithName:[NSString stringWithFormat:@"%@%@", @"dev.flutter.pigeon.camera_avfoundation_frame.CameraApi.saveJpegAsJpeg", messageChannelSuffix]
+        binaryMessenger:binaryMessenger
+        codec:FCPGetMessagesCodec()];
+    if (api) {
+      NSCAssert([api respondsToSelector:@selector(saveJpegAsJpegWithImageData:outputPath:rotationDegrees:completion:)], @"FCPCameraApi api (%@) doesn't respond to @selector(saveJpegAsJpegWithImageData:outputPath:rotationDegrees:completion:)", api);
+      [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
+        NSArray<id> *args = message;
+        NSDictionary<NSString *, id> *arg_imageData = GetNullableObjectAtIndex(args, 0);
+        NSString *arg_outputPath = GetNullableObjectAtIndex(args, 1);
+        NSInteger arg_rotation = [GetNullableObjectAtIndex(args, 2) integerValue];
+        [api saveJpegAsJpegWithImageData:arg_imageData outputPath:arg_outputPath rotationDegrees:arg_rotation completion:^(NSString *_Nullable output, FlutterError *_Nullable error) {
+          callback(wrapResult(output, error));
+        }];
+      }];
+    } else {
+      [channel setMessageHandler:nil];
+    }
+  }
+  {
+    FlutterBasicMessageChannel *channel =
+      [[FlutterBasicMessageChannel alloc]
         initWithName:[NSString stringWithFormat:@"%@%@", @"dev.flutter.pigeon.camera_avfoundation_frame.CameraApi.capturePreviewFrame", messageChannelSuffix]
         binaryMessenger:binaryMessenger
         codec:FCPGetMessagesCodec()];

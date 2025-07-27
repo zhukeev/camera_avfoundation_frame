@@ -613,6 +613,202 @@ final class DefaultCamera: FLTCam, Camera {
     completion(result, nil)
   }
 
+  func saveJpegAsJpeg(
+    withImageData imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    guard let formatRaw = imageData["format"] as? Int32 else {
+      completion(
+        nil, FlutterError(code: "missing_format", message: "Image format is missing", details: nil))
+      return
+    }
+
+    let formatUInt = UInt32(formatRaw)
+
+    switch formatUInt {
+    case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
+      handleYuv420(
+        imageData: imageData,
+        outputPath: outputPath,
+        rotationDegrees: rotationDegrees,
+        completion: completion
+      )
+
+    case kCVPixelFormatType_32BGRA:
+      handleBgra8888(
+        imageData: imageData,
+        outputPath: outputPath,
+        rotationDegrees: rotationDegrees,
+        completion: completion
+      )
+
+    default:
+      completion(
+        nil,
+        FlutterError(
+          code: "unsupported_format",
+          message: "Unsupported image format: \(formatRaw)",
+          details: nil
+        )
+      )
+    }
+  }
+  private func handleYuv420(
+    imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    guard let width = imageData["width"] as? Int,
+      let height = imageData["height"] as? Int,
+      let planes = imageData["planes"] as? [[String: Any]],
+      planes.count == 2,
+      let yData = (planes[0]["bytes"] as? FlutterStandardTypedData)?.data,
+      let uvData = (planes[1]["bytes"] as? FlutterStandardTypedData)?.data
+    else {
+      completion(
+        nil, FlutterError(code: "invalid_data", message: "Invalid NV12 data", details: nil))
+      return
+    }
+
+    var pixelBuffer: CVPixelBuffer?
+    let attrs: [CFString: Any] = [
+      kCVPixelBufferCGImageCompatibilityKey: true,
+      kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+      kCVPixelBufferIOSurfacePropertiesKey: [:],
+    ]
+    let status = CVPixelBufferCreate(
+      nil,
+      width,
+      height,
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+      attrs as CFDictionary,
+      &pixelBuffer
+    )
+
+    guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
+      completion(
+        nil,
+        FlutterError(code: "pixel_buffer", message: "Failed to create CVPixelBuffer", details: nil))
+      return
+    }
+
+    CVPixelBufferLockBaseAddress(buffer, [])
+
+    let yPlane = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)!
+    let uvPlane = CVPixelBufferGetBaseAddressOfPlane(buffer, 1)!
+
+    yData.copyBytes(to: yPlane.assumingMemoryBound(to: UInt8.self), count: yData.count)
+    uvData.copyBytes(to: uvPlane.assumingMemoryBound(to: UInt8.self), count: uvData.count)
+
+    CVPixelBufferUnlockBaseAddress(buffer, [])
+
+    let ciImage = CIImage(cvPixelBuffer: buffer)
+    saveCIImage(ciImage, to: outputPath, rotationDegrees: rotationDegrees, completion: completion)
+  }
+
+  private func handleBgra8888(
+    imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    guard let width = imageData["width"] as? Int,
+      let height = imageData["height"] as? Int,
+      let planes = imageData["planes"] as? [[String: Any]],
+      let bytes = (planes[0]["bytes"] as? FlutterStandardTypedData)?.data
+    else {
+      completion(
+        nil, FlutterError(code: "invalid_data", message: "Invalid BGRA data", details: nil))
+      return
+    }
+
+    let bytesPerRow = planes[0]["bytesPerRow"] as? Int ?? width * 4
+
+    guard let provider = CGDataProvider(data: bytes as CFData) else {
+      completion(
+        nil,
+        FlutterError(
+          code: "provider_error", message: "Failed to create CGDataProvider", details: nil)
+      )
+      return
+    }
+
+    // ❗️ Используем BGRA: B = byte[0], G = byte[1], R = byte[2], A = byte[3]
+    let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
+      .union(.byteOrder32Little)  // <- Ключевой момент
+
+    guard
+      let cgImage = CGImage(
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bitsPerPixel: 32,
+        bytesPerRow: bytesPerRow,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: bitmapInfo,
+        provider: provider,
+        decode: nil,
+        shouldInterpolate: true,
+        intent: .defaultIntent
+      )
+    else {
+      completion(
+        nil, FlutterError(code: "cgimage", message: "Failed to create CGImage", details: nil))
+      return
+    }
+
+    let ciImage = CIImage(cgImage: cgImage)
+    saveCIImage(ciImage, to: outputPath, rotationDegrees: rotationDegrees, completion: completion)
+  }
+
+  private func saveCIImage(
+    _ ciImage: CIImage,
+    to outputPath: String,
+    rotationDegrees: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    let rotated: CIImage
+    switch rotationDegrees {
+    case 90:
+      rotated = ciImage.oriented(.right)
+    case 180:
+      rotated = ciImage.oriented(.down)
+    case 270:
+      rotated = ciImage.oriented(.left)
+    default:
+      rotated = ciImage
+    }
+
+    let context = CIContext()
+
+    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+      let cgImage = context.createCGImage(
+        rotated, from: rotated.extent, format: .RGBA8, colorSpace: colorSpace)
+    else {
+      completion(
+        nil, FlutterError(code: "render_failed", message: "Failed to render CGImage", details: nil))
+      return
+    }
+
+    guard let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9) else {
+      completion(
+        nil, FlutterError(code: "encode_failed", message: "Failed to encode JPEG", details: nil))
+      return
+    }
+
+    do {
+      try jpegData.write(to: URL(fileURLWithPath: outputPath))
+      completion(outputPath, nil)
+    } catch {
+      completion(
+        nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
+    }
+  }
+
   func capturePreviewFrameJpeg(
     outputPath: String, completion: @escaping (String?, FlutterError?) -> Void
   ) {

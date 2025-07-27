@@ -65,6 +65,13 @@ protocol Camera: FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate,
 
   func capturePreviewFrameJpeg(outputPath: String, completion: @escaping (String?, FlutterError?) -> Void)
 
+  func saveJpegAsJpeg(
+    withImageData imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  )
+
   func capturePreviewFrame(completion: @escaping ([String: Any]?, FlutterError?) -> Void)
 
   func lockCaptureOrientation(_ orientation: FCPPlatformDeviceOrientation)
