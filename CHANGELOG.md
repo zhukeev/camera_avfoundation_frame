@@ -1,3 +1,8 @@
+## 0.9.20+4
+
+* **`saveJpegAsJpeg(imageData, outputPath, rotationDegrees)`**  
+  Converts a raw preview frame (YUV420 or BGRA8888) received from the stream into a JPEG file and saves it to the specified path.
+
 ## 0.9.20+3
 
 * Migrates `setZoomLevel` and `setFlashMode` methods to Swift.
