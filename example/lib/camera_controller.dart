@@ -5,7 +5,6 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:camera_avfoundation_frame/camera_avfoundation_frame.dart';
 import 'package:camera_platform_interface_frame/camera_platform_interface_frame.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -315,7 +314,7 @@ class CameraController extends ValueNotifier<CameraValue> {
   }
 
   Future<XFile> saveAsJpeg(CameraImageData imageData, String path, int rotation) async {
-    final cameraImage = await (CameraPlatform.instance as AVFoundationCamera).saveJpegAsJpeg(path, imageData, rotation);
+    final cameraImage = await CameraPlatform.instance.saveAsJpeg(imageData, path, rotation);
     return cameraImage;
   }
 
