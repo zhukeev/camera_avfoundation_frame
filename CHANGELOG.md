@@ -1,3 +1,7 @@
+## 0.9.20+5
+
+* updated camera_platform_interface_frame
+
 ## 0.9.20+4
 
 * **`saveJpegAsJpeg(imageData, outputPath, rotationDegrees)`**  
