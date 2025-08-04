@@ -658,13 +658,14 @@ void SetUpFCPCameraApiWithSuffix(id<FlutterBinaryMessenger> binaryMessenger, NSO
         binaryMessenger:binaryMessenger
         codec:FCPGetMessagesCodec()];
     if (api) {
-      NSCAssert([api respondsToSelector:@selector(saveJpegAsJpegWithImageData:outputPath:rotationDegrees:completion:)], @"FCPCameraApi api (%@) doesn't respond to @selector(saveJpegAsJpegWithImageData:outputPath:rotationDegrees:completion:)", api);
+      NSCAssert([api respondsToSelector:@selector(saveJpegAsJpegWithImageData:outputPath:rotationDegrees:quality:completion:)], @"FCPCameraApi api (%@) doesn't respond to @selector(saveJpegAsJpegWithImageData:outputPath:rotationDegrees:quality:completion:)", api);
       [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
         NSArray<id> *args = message;
         NSDictionary<NSString *, id> *arg_imageData = GetNullableObjectAtIndex(args, 0);
         NSString *arg_outputPath = GetNullableObjectAtIndex(args, 1);
         NSInteger arg_rotation = [GetNullableObjectAtIndex(args, 2) integerValue];
-        [api saveJpegAsJpegWithImageData:arg_imageData outputPath:arg_outputPath rotationDegrees:arg_rotation completion:^(NSString *_Nullable output, FlutterError *_Nullable error) {
+        NSInteger arg_quality = [GetNullableObjectAtIndex(args, 3) integerValue];
+        [api saveJpegAsJpegWithImageData:arg_imageData outputPath:arg_outputPath rotationDegrees:arg_rotation quality:arg_quality completion:^(NSString *_Nullable output, FlutterError *_Nullable error) {
           callback(wrapResult(output, error));
         }];
       }];

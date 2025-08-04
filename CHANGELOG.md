@@ -1,3 +1,7 @@
+## 0.9.20+6
+
+* updated camera_platform_interface_frame to ^2.10.7
+
 ## 0.9.20+5
 
 * updated camera_platform_interface_frame

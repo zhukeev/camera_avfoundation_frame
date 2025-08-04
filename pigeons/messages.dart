@@ -211,8 +211,8 @@ abstract class CameraApi {
   String capturePreviewFrameJpeg(String outputPath);
 
   @async
-  @ObjCSelector('saveJpegAsJpegWithImageData:outputPath:rotationDegrees:')
-  String saveJpegAsJpeg(Map<String, Object?> imageData, String outputPath, int rotation);
+  @ObjCSelector('saveJpegAsJpegWithImageData:outputPath:rotationDegrees:quality:')
+  String saveJpegAsJpeg(Map<String, Object?> imageData, String outputPath, int rotation, int quality);
 
   @async
   @ObjCSelector('capturePreviewFrameWithCompletion')

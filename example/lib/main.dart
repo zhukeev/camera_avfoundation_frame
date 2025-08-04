@@ -13,9 +13,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 
-import 'camera_controller.dart';
-import 'camera_preview.dart';
-
 /// Camera example home widget.
 class CameraExampleHome extends StatefulWidget {
   /// Default Constructor
@@ -577,8 +574,10 @@ class _CameraExampleHomeState extends State<CameraExampleHome> with WidgetsBindi
   Future<void> _initializeCameraController(CameraDescription cameraDescription) async {
     final CameraController cameraController = CameraController(
       cameraDescription,
-      kIsWeb ? ResolutionPreset.max : ResolutionPreset.medium,
-      enableAudio: enableAudio,
+      mediaSettings: MediaSettings(
+        resolutionPreset: kIsWeb ? ResolutionPreset.max : ResolutionPreset.medium,
+        enableAudio: enableAudio,
+      ),
       imageFormatGroup: ImageFormatGroup.bgra8888,
     );
 
@@ -976,28 +975,22 @@ class _CameraExampleHomeState extends State<CameraExampleHome> with WidgetsBindi
       final sw1p = Stopwatch()..start();
 
       print('caputureJpeg requested');
-      final XFile file2 = await cameraController.caputureFrameJpeg(filePath);
-      print('caputureJpeg took ${sw1p.elapsedMilliseconds} ms ${file2.path}');
+      await CameraPlatform.instance.capturePreviewFrameJpeg(filePath);
+
+      print('caputureJpeg took ${sw1p.elapsedMilliseconds} ms ${file.path}');
       sw1p.reset();
 
-      final cameraImage = await cameraController.caputureFrame();
+      final cameraImage = await cameraController.capturePreviewFrame();
       print('caputureFrame took ${sw1p.elapsedMilliseconds} ms');
 
       sw1p.reset();
 
-      final savedFile = await cameraController.saveAsJpeg(cameraImage, filePath, 180);
+      final savedFile = await cameraController.saveAsJpeg(cameraImage, filePath, 180, 90);
       print('saveAsJpeg took ${sw1p.elapsedMilliseconds} ms  format ${cameraImage.format.raw}');
-
-      sw1p.reset();
-
-      // file2.writeAsBytesSync(bytes);
-      // if (convertedImage != null) {
-      // File(file.path).writeAsBytesSync(imglib.encodeJpg(convertedImage));
-      // }
 
       sw1p.stop();
 
-      return file2;
+      return savedFile;
     } on CameraException catch (e) {
       _showCameraException(e);
       return null;

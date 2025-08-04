@@ -617,6 +617,7 @@ final class DefaultCamera: FLTCam, Camera {
     withImageData imageData: [String: Any],
     outputPath: String,
     rotationDegrees: Int32,
+    quality: Int32,
     completion: @escaping (String?, FlutterError?) -> Void
   ) {
     guard let formatRaw = imageData["format"] as? Int32 else {
@@ -634,6 +635,7 @@ final class DefaultCamera: FLTCam, Camera {
         imageData: imageData,
         outputPath: outputPath,
         rotationDegrees: rotationDegrees,
+        quality: quality,
         completion: completion
       )
 
@@ -642,6 +644,7 @@ final class DefaultCamera: FLTCam, Camera {
         imageData: imageData,
         outputPath: outputPath,
         rotationDegrees: rotationDegrees,
+        quality: quality,
         completion: completion
       )
 
@@ -660,6 +663,7 @@ final class DefaultCamera: FLTCam, Camera {
     imageData: [String: Any],
     outputPath: String,
     rotationDegrees: Int32,
+    quality: Int32,
     completion: @escaping (String?, FlutterError?) -> Void
   ) {
     guard let width = imageData["width"] as? Int,
@@ -707,13 +711,14 @@ final class DefaultCamera: FLTCam, Camera {
     CVPixelBufferUnlockBaseAddress(buffer, [])
 
     let ciImage = CIImage(cvPixelBuffer: buffer)
-    saveCIImage(ciImage, to: outputPath, rotationDegrees: rotationDegrees, completion: completion)
+    saveCIImage(ciImage, to: outputPath, rotationDegrees: rotationDegrees,quality: quality, completion: completion)
   }
 
   private func handleBgra8888(
     imageData: [String: Any],
     outputPath: String,
     rotationDegrees: Int32,
+    quality: Int32,
     completion: @escaping (String?, FlutterError?) -> Void
   ) {
     guard let width = imageData["width"] as? Int,
@@ -762,13 +767,14 @@ final class DefaultCamera: FLTCam, Camera {
     }
 
     let ciImage = CIImage(cgImage: cgImage)
-    saveCIImage(ciImage, to: outputPath, rotationDegrees: rotationDegrees, completion: completion)
+    saveCIImage(ciImage, to: outputPath, rotationDegrees: rotationDegrees,quality: quality, completion: completion)
   }
 
   private func saveCIImage(
     _ ciImage: CIImage,
     to outputPath: String,
     rotationDegrees: Int32,
+    quality: Int32,
     completion: @escaping (String?, FlutterError?) -> Void
   ) {
     let rotated: CIImage
@@ -794,7 +800,11 @@ final class DefaultCamera: FLTCam, Camera {
       return
     }
 
-    guard let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9) else {
+    // Clamp and convert quality (0–100) to CGFloat (0.0–1.0)
+    let clampedQuality = max(0, min(quality, 100))
+    let compressionQuality = CGFloat(clampedQuality) / 100.0
+
+    guard let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: compressionQuality) else {
       completion(
         nil, FlutterError(code: "encode_failed", message: "Failed to encode JPEG", details: nil))
       return

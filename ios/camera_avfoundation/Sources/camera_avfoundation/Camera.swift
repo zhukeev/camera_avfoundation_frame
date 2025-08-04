@@ -69,6 +69,7 @@ protocol Camera: FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate,
     withImageData imageData: [String: Any],
     outputPath: String,
     rotationDegrees: Int32,
+    quality: Int32,
     completion: @escaping (String?, FlutterError?) -> Void
   )
 

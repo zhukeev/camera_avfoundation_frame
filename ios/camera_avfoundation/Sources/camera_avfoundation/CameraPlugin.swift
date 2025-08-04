@@ -378,6 +378,7 @@ extension CameraPlugin: FCPCameraApi {
   withImageData imageData: [String: Any],
   outputPath: String,
   rotationDegrees: Int,
+  quality: Int,
   completion: @escaping (String?, FlutterError?) -> Void
 ) {
   captureSessionQueue.async { [weak self] in
@@ -385,6 +386,7 @@ extension CameraPlugin: FCPCameraApi {
       withImageData: imageData,
       outputPath: outputPath,
       rotationDegrees: Int32(rotationDegrees),
+      quality: Int32(quality),
       completion: completion
     )
   }
