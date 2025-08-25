@@ -63,7 +63,9 @@ protocol Camera: FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate,
 
   func captureToFile(completion: @escaping (_ path: String?, _ error: FlutterError?) -> Void)
 
-  func capturePreviewFrameJpeg(outputPath: String, completion: @escaping (String?, FlutterError?) -> Void)
+  func capturePreviewFrameJpeg(
+    outputPath: String, rotationDegrees: Int32,
+    quality: Int32, completion: @escaping (String?, FlutterError?) -> Void)
 
   func saveJpegAsJpeg(
     withImageData imageData: [String: Any],

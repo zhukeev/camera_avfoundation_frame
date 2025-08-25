@@ -607,7 +607,7 @@ class CameraApi {
     }
   }
 
-  Future<String> capturePreviewFrameJpeg(String outputPath) async {
+  Future<String> capturePreviewFrameJpeg(String outputPath, int rotation, int quality) async {
     final String pigeonVar_channelName = 'dev.flutter.pigeon.camera_avfoundation_frame.CameraApi.capturePreviewFrameJpeg$pigeonVar_messageChannelSuffix';
     final BasicMessageChannel<Object?> pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
@@ -615,7 +615,7 @@ class CameraApi {
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final List<Object?>? pigeonVar_replyList =
-        await pigeonVar_channel.send(<Object?>[outputPath]) as List<Object?>?;
+        await pigeonVar_channel.send(<Object?>[outputPath, rotation, quality]) as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
     } else if (pigeonVar_replyList.length > 1) {

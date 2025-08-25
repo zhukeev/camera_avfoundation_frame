@@ -214,7 +214,7 @@ NSObject<FlutterMessageCodec> *FCPGetMessagesCodec(void);
 /// Takes a picture with the current settings, and returns the path to the
 /// resulting file.
 - (void)takePictureWithCompletion:(void (^)(NSString *_Nullable, FlutterError *_Nullable))completion;
-- (void)capturePreviewFrameJpegOutputPath:(NSString *)outputPath completion:(void (^)(NSString *_Nullable, FlutterError *_Nullable))completion;
+- (void)capturePreviewFrameJpegOutputPath:(NSString *)outputPath rotationDegrees:(NSInteger)rotation quality:(NSInteger)quality completion:(void (^)(NSString *_Nullable, FlutterError *_Nullable))completion;
 - (void)saveJpegAsJpegWithImageData:(NSDictionary<NSString *, id> *)imageData outputPath:(NSString *)outputPath rotationDegrees:(NSInteger)rotation quality:(NSInteger)quality completion:(void (^)(NSString *_Nullable, FlutterError *_Nullable))completion;
 - (void)capturePreviewFrameWithCompletion:(void (^)(NSDictionary<NSString *, id> *_Nullable, FlutterError *_Nullable))completion;
 /// Does any preprocessing necessary before beginning to record video.

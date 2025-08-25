@@ -367,32 +367,34 @@ extension CameraPlugin: FCPCameraApi {
 
   public func capturePreviewFrameJpegOutputPath(
     _ outputPath: String,
+    rotationDegrees: Int,
+    quality: Int,
     completion: @escaping (String?, FlutterError?) -> Void
   ) {
     captureSessionQueue.async { [weak self] in
-      self?.camera?.capturePreviewFrameJpeg(outputPath: outputPath, completion: completion)
+      self?.camera?.capturePreviewFrameJpeg(
+        outputPath: outputPath, rotationDegrees: Int32(rotationDegrees),
+        quality: Int32(quality), completion: completion)
     }
   }
 
   public func saveJpegAsJpeg(
-  withImageData imageData: [String: Any],
-  outputPath: String,
-  rotationDegrees: Int,
-  quality: Int,
-  completion: @escaping (String?, FlutterError?) -> Void
-) {
-  captureSessionQueue.async { [weak self] in
-    self?.camera?.saveJpegAsJpeg(
-      withImageData: imageData,
-      outputPath: outputPath,
-      rotationDegrees: Int32(rotationDegrees),
-      quality: Int32(quality),
-      completion: completion
-    )
+    withImageData imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int,
+    quality: Int,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    captureSessionQueue.async { [weak self] in
+      self?.camera?.saveJpegAsJpeg(
+        withImageData: imageData,
+        outputPath: outputPath,
+        rotationDegrees: Int32(rotationDegrees),
+        quality: Int32(quality),
+        completion: completion
+      )
+    }
   }
-}
-
-
 
   public func capturePreviewFrame(completion: @escaping ([String: Any]?, FlutterError?) -> Void) {
     captureSessionQueue.async { [weak self] in

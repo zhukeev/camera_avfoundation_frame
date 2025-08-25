@@ -711,7 +711,9 @@ final class DefaultCamera: FLTCam, Camera {
     CVPixelBufferUnlockBaseAddress(buffer, [])
 
     let ciImage = CIImage(cvPixelBuffer: buffer)
-    saveCIImage(ciImage, to: outputPath, rotationDegrees: rotationDegrees,quality: quality, completion: completion)
+    saveCIImage(
+      ciImage, to: outputPath, rotationDegrees: rotationDegrees, quality: quality,
+      completion: completion)
   }
 
   private func handleBgra8888(
@@ -767,7 +769,9 @@ final class DefaultCamera: FLTCam, Camera {
     }
 
     let ciImage = CIImage(cgImage: cgImage)
-    saveCIImage(ciImage, to: outputPath, rotationDegrees: rotationDegrees,quality: quality, completion: completion)
+    saveCIImage(
+      ciImage, to: outputPath, rotationDegrees: rotationDegrees, quality: quality,
+      completion: completion)
   }
 
   private func saveCIImage(
@@ -804,7 +808,8 @@ final class DefaultCamera: FLTCam, Camera {
     let clampedQuality = max(0, min(quality, 100))
     let compressionQuality = CGFloat(clampedQuality) / 100.0
 
-    guard let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: compressionQuality) else {
+    guard let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: compressionQuality)
+    else {
       completion(
         nil, FlutterError(code: "encode_failed", message: "Failed to encode JPEG", details: nil))
       return
@@ -820,48 +825,65 @@ final class DefaultCamera: FLTCam, Camera {
   }
 
   func capturePreviewFrameJpeg(
-    outputPath: String, completion: @escaping (String?, FlutterError?) -> Void
-  ) {
-    guard let pixelBuffer = copyPixelBuffer()?.takeRetainedValue() else {
-      completion(nil, FlutterError(code: "no_image", message: "No image available", details: nil))
-      return
-    }
-
-    let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-    let context = CIContext()
-
-    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
-      completion(
-        nil, FlutterError(code: "colorSpace", message: "Unable to create color space", details: nil)
-      )
-      return
-    }
-
-    guard
-      let cgImage = context.createCGImage(
-        ciImage, from: ciImage.extent, format: .RGBA8, colorSpace: colorSpace)
-    else {
-      completion(
-        nil, FlutterError(code: "convert_failed", message: "Unable to convert image", details: nil))
-      return
-    }
-
-    let uiImage = UIImage(cgImage: cgImage)
-
-    guard let jpegData = uiImage.jpegData(compressionQuality: 0.9) else {
-      completion(
-        nil, FlutterError(code: "jpeg_encode", message: "Failed to encode image", details: nil))
-      return
-    }
-
-    do {
-      try jpegData.write(to: URL(fileURLWithPath: outputPath))
-      completion(outputPath, nil)
-    } catch {
-      completion(
-        nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
-    }
+  outputPath: String, rotationDegrees: Int32,
+  quality: Int32, completion: @escaping (String?, FlutterError?) -> Void
+) {
+  guard let pixelBuffer = copyPixelBuffer()?.takeRetainedValue() else {
+    completion(nil, FlutterError(code: "no_image", message: "No image available", details: nil))
+    return
   }
+
+  let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+
+  let rotated: CIImage
+  switch rotationDegrees {
+  case 90:
+    rotated = ciImage.oriented(.right)
+  case 180:
+    rotated = ciImage.oriented(.down)
+  case 270:
+    rotated = ciImage.oriented(.left)
+  default:
+    rotated = ciImage
+  }
+
+  let context = CIContext()
+
+  guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
+    completion(
+      nil, FlutterError(code: "colorSpace", message: "Unable to create color space", details: nil)
+    )
+    return
+  }
+
+  guard
+    let cgImage = context.createCGImage(
+      rotated, from: rotated.extent, format: .RGBA8, colorSpace: colorSpace)
+  else {
+    completion(
+      nil, FlutterError(code: "convert_failed", message: "Unable to convert image", details: nil))
+    return
+  }
+
+  let uiImage = UIImage(cgImage: cgImage)
+
+  let compressionQuality = max(0.0, min(1.0, Double(quality) / 100.0))
+
+  guard let jpegData = uiImage.jpegData(compressionQuality: compressionQuality) else {
+    completion(
+      nil, FlutterError(code: "jpeg_encode", message: "Failed to encode image", details: nil))
+    return
+  }
+
+  do {
+    try jpegData.write(to: URL(fileURLWithPath: outputPath))
+    completion(outputPath, nil)
+  } catch {
+    completion(
+      nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
+  }
+}
+
 
   func setUpCaptureSessionForVideoIfNeeded() {
     guard !videoCaptureSession.outputs.contains(where: { $0 is AVCaptureVideoDataOutput }) else {

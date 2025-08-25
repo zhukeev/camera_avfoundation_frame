@@ -207,8 +207,8 @@ abstract class CameraApi {
   String takePicture();
 
   @async
-  @ObjCSelector('capturePreviewFrameJpegOutputPath:')
-  String capturePreviewFrameJpeg(String outputPath);
+  @ObjCSelector('capturePreviewFrameJpegOutputPath:rotationDegrees:quality:')
+  String capturePreviewFrameJpeg(String outputPath, int rotation, int quality);
 
   @async
   @ObjCSelector('saveJpegAsJpegWithImageData:outputPath:rotationDegrees:quality:')

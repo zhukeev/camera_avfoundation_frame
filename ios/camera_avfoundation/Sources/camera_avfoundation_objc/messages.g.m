@@ -639,11 +639,13 @@ void SetUpFCPCameraApiWithSuffix(id<FlutterBinaryMessenger> binaryMessenger, NSO
         binaryMessenger:binaryMessenger
         codec:FCPGetMessagesCodec()];
     if (api) {
-      NSCAssert([api respondsToSelector:@selector(capturePreviewFrameJpegOutputPath:completion:)], @"FCPCameraApi api (%@) doesn't respond to @selector(capturePreviewFrameJpegOutputPath:completion:)", api);
+      NSCAssert([api respondsToSelector:@selector(capturePreviewFrameJpegOutputPath:rotationDegrees:quality:completion:)], @"FCPCameraApi api (%@) doesn't respond to @selector(capturePreviewFrameJpegOutputPath:rotationDegrees:quality:completion:)", api);
       [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
         NSArray<id> *args = message;
         NSString *arg_outputPath = GetNullableObjectAtIndex(args, 0);
-        [api capturePreviewFrameJpegOutputPath:arg_outputPath completion:^(NSString *_Nullable output, FlutterError *_Nullable error) {
+        NSInteger arg_rotation = [GetNullableObjectAtIndex(args, 1) integerValue];
+        NSInteger arg_quality = [GetNullableObjectAtIndex(args, 2) integerValue];
+        [api capturePreviewFrameJpegOutputPath:arg_outputPath rotationDegrees:arg_rotation quality:arg_quality completion:^(NSString *_Nullable output, FlutterError *_Nullable error) {
           callback(wrapResult(output, error));
         }];
       }];
