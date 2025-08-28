@@ -69,8 +69,7 @@ public final class CameraPlugin: NSObject, FlutterPlugin {
 
     super.init()
 
-    captureSessionQueue.setSpecific(
-      key: captureSessionQueueSpecificKey, value: captureSessionQueueSpecificValue)
+    FLTDispatchQueueSetSpecific(captureSessionQueue, FLTCaptureSessionQueueSpecific)
 
     UIDevice.current.beginGeneratingDeviceOrientationNotifications()
     NotificationCenter.default.addObserver(
@@ -301,7 +300,7 @@ extension CameraPlugin: FCPCameraApi {
       binaryMessenger: messenger,
       messageChannelSuffix: "\(cameraId)"
     )
-
+    camera.setUpCaptureSessionForVideoIfNeeded()
     camera.reportInitializationState()
     sendDeviceOrientation(UIDevice.current.orientation)
     camera.start()
@@ -363,6 +362,43 @@ extension CameraPlugin: FCPCameraApi {
   public func takePicture(completion: @escaping (String?, FlutterError?) -> Void) {
     captureSessionQueue.async { [weak self] in
       self?.camera?.captureToFile(completion: completion)
+    }
+  }
+
+  public func capturePreviewFrameJpegOutputPath(
+    _ outputPath: String,
+    rotationDegrees: Int,
+    quality: Int,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    captureSessionQueue.async { [weak self] in
+      self?.camera?.capturePreviewFrameJpeg(
+        outputPath: outputPath, rotationDegrees: Int32(rotationDegrees),
+        quality: Int32(quality), completion: completion)
+    }
+  }
+
+  public func saveJpegAsJpeg(
+    withImageData imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int,
+    quality: Int,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    captureSessionQueue.async { [weak self] in
+      self?.camera?.saveJpegAsJpeg(
+        withImageData: imageData,
+        outputPath: outputPath,
+        rotationDegrees: Int32(rotationDegrees),
+        quality: Int32(quality),
+        completion: completion
+      )
+    }
+  }
+
+  public func capturePreviewFrame(completion: @escaping ([String: Any]?, FlutterError?) -> Void) {
+    captureSessionQueue.async { [weak self] in
+      self?.camera?.capturePreviewFrame(completion: completion)
     }
   }
 

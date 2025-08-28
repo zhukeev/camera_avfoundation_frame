@@ -10,14 +10,6 @@ import CoreMotion
 #endif
 
 final class DefaultCamera: FLTCam, Camera {
-  override var videoFormat: FourCharCode {
-    didSet {
-      captureVideoOutput.videoSettings = [
-        kCVPixelBufferPixelFormatTypeKey as String: videoFormat
-      ]
-    }
-  }
-
   override var deviceOrientation: UIDeviceOrientation {
     get { super.deviceOrientation }
     set {
@@ -38,10 +30,6 @@ final class DefaultCamera: FLTCam, Camera {
   private let pixelBufferSynchronizationQueue = DispatchQueue(
     label: "io.flutter.camera.pixelBufferSynchronizationQueue")
 
-  /// The queue on which captured photos (not videos) are written to disk.
-  /// Videos are written to disk by `videoAdaptor` on an internal queue managed by AVFoundation.
-  private let photoIOQueue = DispatchQueue(label: "io.flutter.camera.photoIOQueue")
-
   /// Tracks the latest pixel buffer sent from AVFoundation's sample buffer delegate callback.
   /// Used to deliver the latest pixel buffer to the flutter engine via the `copyPixelBuffer` API.
   private var latestPixelBuffer: CVPixelBuffer?
@@ -57,125 +45,13 @@ final class DefaultCamera: FLTCam, Camera {
   private var exposureMode = FCPPlatformExposureMode.auto
   private var focusMode = FCPPlatformFocusMode.auto
 
+  private let lastFrameStore = LastFrameStore()
+
   private static func flutterErrorFromNSError(_ error: NSError) -> FlutterError {
     return FlutterError(
       code: "Error \(error.code)",
       message: error.localizedDescription,
       details: error.domain)
-  }
-
-  private static func createConnection(
-    captureDevice: FLTCaptureDevice,
-    videoFormat: FourCharCode,
-    captureDeviceInputFactory: FLTCaptureDeviceInputFactory
-  ) throws -> (FLTCaptureInput, FLTCaptureVideoDataOutput, AVCaptureConnection) {
-    // Setup video capture input.
-    let captureVideoInput = try captureDeviceInputFactory.deviceInput(with: captureDevice)
-
-    // Setup video capture output.
-    let captureVideoOutput = FLTDefaultCaptureVideoDataOutput(
-      captureVideoOutput: AVCaptureVideoDataOutput())
-    captureVideoOutput.videoSettings = [
-      kCVPixelBufferPixelFormatTypeKey as String: videoFormat
-    ]
-    captureVideoOutput.alwaysDiscardsLateVideoFrames = true
-
-    // Setup video capture connection.
-    let connection = AVCaptureConnection(
-      inputPorts: captureVideoInput.ports,
-      output: captureVideoOutput.avOutput)
-
-    if captureDevice.position == .front {
-      connection.isVideoMirrored = true
-    }
-
-    return (captureVideoInput, captureVideoOutput, connection)
-  }
-
-  func setUpCaptureSessionForAudioIfNeeded() {
-    // Don't setup audio twice or we will lose the audio.
-    guard !mediaSettings.enableAudio || !isAudioSetup else { return }
-
-    let audioDevice = audioCaptureDeviceFactory()
-    do {
-      // Create a device input with the device and add it to the session.
-      // Setup the audio input.
-      let audioInput = try captureDeviceInputFactory.deviceInput(with: audioDevice)
-
-      // Setup the audio output.
-      let audioOutput = AVCaptureAudioDataOutput()
-
-      let block = {
-        // Set up options implicit to AVAudioSessionCategoryPlayback to avoid conflicts with other
-        // plugins like video_player.
-        DefaultCamera.upgradeAudioSessionCategory(
-          requestedCategory: .playAndRecord,
-          options: [.defaultToSpeaker, .allowBluetoothA2DP, .allowAirPlay]
-        )
-      }
-
-      if !Thread.isMainThread {
-        DispatchQueue.main.sync(execute: block)
-      } else {
-        block()
-      }
-
-      if audioCaptureSession.canAddInput(audioInput) {
-        audioCaptureSession.addInput(audioInput)
-
-        if audioCaptureSession.canAddOutput(audioOutput) {
-          audioCaptureSession.addOutput(audioOutput)
-          audioOutput.setSampleBufferDelegate(self, queue: captureSessionQueue)
-          isAudioSetup = true
-        } else {
-          reportErrorMessage("Unable to add Audio input/output to session capture")
-          isAudioSetup = false
-        }
-      }
-    } catch let error as NSError {
-      reportErrorMessage(error.description)
-    }
-  }
-
-  // This function, although slightly modified, is also in video_player_avfoundation (in ObjC).
-  // Both need to do the same thing and run on the same thread (for example main thread).
-  // Configure application wide audio session manually to prevent overwriting flag
-  // MixWithOthers by capture session.
-  // Only change category if it is considered an upgrade which means it can only enable
-  // ability to play in silent mode or ability to record audio but never disables it,
-  // that could affect other plugins which depend on this global state. Only change
-  // category or options if there is change to prevent unnecessary lags and silence.
-  private static func upgradeAudioSessionCategory(
-    requestedCategory: AVAudioSession.Category,
-    options: AVAudioSession.CategoryOptions
-  ) {
-    let playCategories: Set<AVAudioSession.Category> = [.playback, .playAndRecord]
-    let recordCategories: Set<AVAudioSession.Category> = [.record, .playAndRecord]
-    let requiredCategories: Set<AVAudioSession.Category> = [
-      requestedCategory, AVAudioSession.sharedInstance().category,
-    ]
-
-    let requiresPlay = !requiredCategories.isDisjoint(with: playCategories)
-    let requiresRecord = !requiredCategories.isDisjoint(with: recordCategories)
-
-    var finalCategory = requestedCategory
-    if requiresPlay && requiresRecord {
-      finalCategory = .playAndRecord
-    } else if requiresPlay {
-      finalCategory = .playback
-    } else if requiresRecord {
-      finalCategory = .record
-    }
-
-    let finalOptions = AVAudioSession.sharedInstance().categoryOptions.union(options)
-
-    if finalCategory == AVAudioSession.sharedInstance().category
-      && finalOptions == AVAudioSession.sharedInstance().categoryOptions
-    {
-      return
-    }
-
-    try? AVAudioSession.sharedInstance().setCategory(finalCategory, options: finalOptions)
   }
 
   func reportInitializationState() {
@@ -212,152 +88,6 @@ final class DefaultCamera: FLTCam, Camera {
     audioCaptureSession.stopRunning()
   }
 
-  func startVideoRecording(
-    completion: @escaping (FlutterError?) -> Void,
-    messengerForStreaming messenger: FlutterBinaryMessenger?
-  ) {
-    guard !isRecording else {
-      completion(
-        FlutterError(
-          code: "Error",
-          message: "Video is already recording",
-          details: nil))
-      return
-    }
-
-    if let messenger = messenger {
-      startImageStream(with: messenger) { [weak self] error in
-        self?.setUpVideoRecording(completion: completion)
-      }
-      return
-    }
-
-    setUpVideoRecording(completion: completion)
-  }
-
-  /// Main logic to setup the video recording.
-  private func setUpVideoRecording(completion: @escaping (FlutterError?) -> Void) {
-    let videoRecordingPath: String
-    do {
-      videoRecordingPath = try getTemporaryFilePath(
-        withExtension: "mp4",
-        subfolder: "videos",
-        prefix: "REC_")
-      self.videoRecordingPath = videoRecordingPath
-    } catch let error as NSError {
-      completion(DefaultCamera.flutterErrorFromNSError(error))
-      return
-    }
-
-    guard setupWriter(forPath: videoRecordingPath) else {
-      completion(
-        FlutterError(
-          code: "IOError",
-          message: "Setup Writer Failed",
-          details: nil))
-      return
-    }
-
-    // startWriting should not be called in didOutputSampleBuffer where it can cause state
-    // in which isRecording is true but videoWriter.status is .unknown
-    // in stopVideoRecording if it is called after startVideoRecording but before
-    // didOutputSampleBuffer had chance to call startWriting and lag at start of video
-    // https://github.com/flutter/flutter/issues/132016
-    // https://github.com/flutter/flutter/issues/151319
-    videoWriter?.startWriting()
-    isFirstVideoSample = true
-    isRecording = true
-    isRecordingPaused = false
-    videoTimeOffset = CMTime.zero
-    audioTimeOffset = CMTime.zero
-    videoIsDisconnected = false
-    audioIsDisconnected = false
-    completion(nil)
-  }
-
-  private func setupWriter(forPath path: String) -> Bool {
-    setUpCaptureSessionForAudioIfNeeded()
-
-    var error: NSError?
-    videoWriter = assetWriterFactory(URL(fileURLWithPath: path), AVFileType.mp4, &error)
-
-    guard let videoWriter = videoWriter else {
-      if let error = error {
-        reportErrorMessage(error.description)
-      }
-      return false
-    }
-
-    var videoSettings = mediaSettingsAVWrapper.recommendedVideoSettingsForAssetWriter(
-      withFileType:
-        AVFileType.mp4,
-      for: captureVideoOutput
-    )
-
-    if mediaSettings.videoBitrate != nil || mediaSettings.framesPerSecond != nil {
-      var compressionProperties: [String: Any] = [:]
-
-      if let videoBitrate = mediaSettings.videoBitrate {
-        compressionProperties[AVVideoAverageBitRateKey] = videoBitrate
-      }
-
-      if let framesPerSecond = mediaSettings.framesPerSecond {
-        compressionProperties[AVVideoExpectedSourceFrameRateKey] = framesPerSecond
-      }
-
-      videoSettings?[AVVideoCompressionPropertiesKey] = compressionProperties
-    }
-
-    let videoWriterInput = mediaSettingsAVWrapper.assetWriterVideoInput(
-      withOutputSettings: videoSettings)
-    self.videoWriterInput = videoWriterInput
-
-    let sourcePixelBufferAttributes: [String: Any] = [
-      kCVPixelBufferPixelFormatTypeKey as String: videoFormat
-    ]
-
-    videoAdaptor = inputPixelBufferAdaptorFactory(videoWriterInput, sourcePixelBufferAttributes)
-
-    videoWriterInput.expectsMediaDataInRealTime = true
-
-    // Add the audio input
-    if mediaSettings.enableAudio {
-      var audioChannelLayout = AudioChannelLayout()
-      audioChannelLayout.mChannelLayoutTag = kAudioChannelLayoutTag_Mono
-
-      let audioChannelLayoutData = withUnsafeBytes(of: &audioChannelLayout) { Data($0) }
-
-      var audioSettings: [String: Any] = [
-        AVFormatIDKey: kAudioFormatMPEG4AAC,
-        AVSampleRateKey: 44100.0,
-        AVNumberOfChannelsKey: 1,
-        AVChannelLayoutKey: audioChannelLayoutData,
-      ]
-
-      if let audioBitrate = mediaSettings.audioBitrate {
-        audioSettings[AVEncoderBitRateKey] = audioBitrate
-      }
-
-      let newAudioWriterInput = mediaSettingsAVWrapper.assetWriterAudioInput(
-        withOutputSettings: audioSettings)
-      newAudioWriterInput.expectsMediaDataInRealTime = true
-      mediaSettingsAVWrapper.addInput(newAudioWriterInput, to: videoWriter)
-      self.audioWriterInput = newAudioWriterInput
-    }
-
-    if flashMode == .torch {
-      try? captureDevice.lockForConfiguration()
-      captureDevice.torchMode = .on
-      captureDevice.unlockForConfiguration()
-    }
-
-    mediaSettingsAVWrapper.addInput(videoWriterInput, to: videoWriter)
-
-    captureVideoOutput.setSampleBufferDelegate(self, queue: captureSessionQueue)
-
-    return true
-  }
-
   func pauseVideoRecording() {
     isRecordingPaused = true
     videoIsDisconnected = true
@@ -366,127 +96,6 @@ final class DefaultCamera: FLTCam, Camera {
 
   func resumeVideoRecording() {
     isRecordingPaused = false
-  }
-
-  func stopVideoRecording(completion: @escaping (String?, FlutterError?) -> Void) {
-    guard isRecording else {
-      let error = NSError(
-        domain: NSCocoaErrorDomain,
-        code: URLError.resourceUnavailable.rawValue,
-        userInfo: [NSLocalizedDescriptionKey: "Video is not recording!"]
-      )
-      completion(nil, DefaultCamera.flutterErrorFromNSError(error))
-      return
-    }
-
-    isRecording = false
-
-    // When `isRecording` is true `startWriting` was already called so `videoWriter.status`
-    // is always either `.writing` or `.failed` and `finishWriting` does not throw exceptions so
-    // there is no need to check `videoWriter.status`
-    videoWriter?.finishWriting { [weak self] in
-      guard let strongSelf = self else { return }
-
-      if strongSelf.videoWriter?.status == .completed {
-        strongSelf.updateOrientation()
-        completion(strongSelf.videoRecordingPath, nil)
-        strongSelf.videoRecordingPath = nil
-      } else {
-        completion(
-          nil,
-          FlutterError(
-            code: "IOError",
-            message: "AVAssetWriter could not finish writing!",
-            details: nil))
-      }
-    }
-  }
-
-  func captureToFile(completion: @escaping (String?, FlutterError?) -> Void) {
-    var settings = AVCapturePhotoSettings()
-
-    if mediaSettings.resolutionPreset == .max {
-      settings.isHighResolutionPhotoEnabled = true
-    }
-
-    let fileExtension: String
-
-    let isHEVCCodecAvailable = capturePhotoOutput.availablePhotoCodecTypes.contains(
-      .hevc)
-
-    if fileFormat == .heif, isHEVCCodecAvailable {
-      settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
-      fileExtension = "heif"
-    } else {
-      fileExtension = "jpg"
-    }
-
-    if flashMode != .torch {
-      settings.flashMode = FCPGetAVCaptureFlashModeForPigeonFlashMode(flashMode)
-    }
-
-    let path: String
-    do {
-      path = try getTemporaryFilePath(
-        withExtension: fileExtension,
-        subfolder: "pictures",
-        prefix: "CAP_")
-    } catch let error as NSError {
-      completion(nil, DefaultCamera.flutterErrorFromNSError(error))
-      return
-    }
-
-    let savePhotoDelegate = FLTSavePhotoDelegate(
-      path: path,
-      ioQueue: photoIOQueue,
-      completionHandler: { [weak self] path, error in
-        guard let strongSelf = self else { return }
-
-        strongSelf.captureSessionQueue.async { [weak self] in
-          self?.inProgressSavePhotoDelegates.removeObject(
-            forKey: settings.uniqueID)
-        }
-
-        if let error = error {
-          completion(nil, DefaultCamera.flutterErrorFromNSError(error as NSError))
-        } else {
-          assert(path != nil, "Path must not be nil if no error.")
-          completion(path, nil)
-        }
-      }
-    )
-
-    assert(
-      DispatchQueue.getSpecific(key: captureSessionQueueSpecificKey)
-        == captureSessionQueueSpecificValue,
-      "save photo delegate references must be updated on the capture session queue")
-    inProgressSavePhotoDelegates[settings.uniqueID] = savePhotoDelegate
-    capturePhotoOutput.capturePhoto(with: settings, delegate: savePhotoDelegate)
-  }
-
-  private func getTemporaryFilePath(
-    withExtension ext: String,
-    subfolder: String,
-    prefix: String
-  ) throws -> String {
-    let documentDirectory = FileManager.default.urls(
-      for: .documentDirectory,
-      in: .userDomainMask)[0]
-
-    let fileDirectory = documentDirectory.appendingPathComponent("camera").appendingPathComponent(
-      subfolder)
-    let fileName = prefix + UUID().uuidString
-    let file = fileDirectory.appendingPathComponent(fileName).appendingPathExtension(ext).path
-
-    let fileManager = FileManager.default
-    if !fileManager.fileExists(atPath: fileDirectory.path) {
-      try fileManager.createDirectory(
-        at: fileDirectory,
-        withIntermediateDirectories: true,
-        attributes: nil)
-    }
-
-    return file
   }
 
   func lockCaptureOrientation(_ pigeonOrientation: FCPPlatformDeviceOrientation) {
@@ -734,141 +343,6 @@ final class DefaultCamera: FLTCam, Camera {
     isPreviewPaused = false
   }
 
-  func setDescriptionWhileRecording(
-    _ cameraName: String, withCompletion completion: @escaping (FlutterError?) -> Void
-  ) {
-    guard isRecording else {
-      completion(
-        FlutterError(
-          code: "setDescriptionWhileRecordingFailed",
-          message: "Device was not recording",
-          details: nil))
-      return
-    }
-
-    captureDevice = captureDeviceFactory(cameraName)
-
-    let oldConnection = captureVideoOutput.connection(withMediaType: .video)
-
-    // Stop video capture from the old output.
-    captureVideoOutput.setSampleBufferDelegate(nil, queue: nil)
-
-    // Remove the old video capture connections.
-    videoCaptureSession.beginConfiguration()
-    videoCaptureSession.removeInput(captureVideoInput)
-    videoCaptureSession.removeOutput(captureVideoOutput.avOutput)
-
-    let newConnection: AVCaptureConnection
-
-    do {
-      (captureVideoInput, captureVideoOutput, newConnection) = try DefaultCamera.createConnection(
-        captureDevice: captureDevice,
-        videoFormat: videoFormat,
-        captureDeviceInputFactory: captureDeviceInputFactory)
-
-      captureVideoOutput.setSampleBufferDelegate(self, queue: captureSessionQueue)
-    } catch {
-      completion(
-        FlutterError(
-          code: "VideoError",
-          message: "Unable to create video connection",
-          details: nil))
-      return
-    }
-
-    // Keep the same orientation the old connections had.
-    if let oldConnection = oldConnection, newConnection.isVideoOrientationSupported {
-      newConnection.videoOrientation = oldConnection.videoOrientation
-    }
-
-    // Add the new connections to the session.
-    if !videoCaptureSession.canAddInput(captureVideoInput) {
-      completion(
-        FlutterError(
-          code: "VideoError",
-          message: "Unable to switch video input",
-          details: nil))
-    }
-    videoCaptureSession.addInputWithNoConnections(captureVideoInput)
-
-    if !videoCaptureSession.canAddOutput(captureVideoOutput.avOutput) {
-      completion(
-        FlutterError(
-          code: "VideoError",
-          message: "Unable to switch video output",
-          details: nil))
-    }
-    videoCaptureSession.addOutputWithNoConnections(captureVideoOutput.avOutput)
-
-    if !videoCaptureSession.canAddConnection(newConnection) {
-      completion(
-        FlutterError(
-          code: "VideoError",
-          message: "Unable to switch video connection",
-          details: nil))
-    }
-    videoCaptureSession.addConnection(newConnection)
-    videoCaptureSession.commitConfiguration()
-
-    completion(nil)
-  }
-
-  func startImageStream(
-    with messenger: any FlutterBinaryMessenger, completion: @escaping (FlutterError?) -> Void
-  ) {
-    startImageStream(
-      with: messenger,
-      imageStreamHandler: FLTImageStreamHandler(captureSessionQueue: captureSessionQueue),
-      completion: completion
-    )
-  }
-
-  func startImageStream(
-    with messenger: FlutterBinaryMessenger,
-    imageStreamHandler: FLTImageStreamHandler,
-    completion: @escaping (FlutterError?) -> Void
-  ) {
-    if isStreamingImages {
-      reportErrorMessage("Images from camera are already streaming!")
-      completion(nil)
-      return
-    }
-
-    let eventChannel = FlutterEventChannel(
-      name: "plugins.flutter.io/camera_avfoundation/imageStream",
-      binaryMessenger: messenger
-    )
-    let threadSafeEventChannel = FLTThreadSafeEventChannel(eventChannel: eventChannel)
-
-    self.imageStreamHandler = imageStreamHandler
-    threadSafeEventChannel.setStreamHandler(imageStreamHandler) { [weak self] in
-      guard let strongSelf = self else {
-        completion(nil)
-        return
-      }
-
-      strongSelf.captureSessionQueue.async { [weak self] in
-        guard let strongSelf = self else {
-          completion(nil)
-          return
-        }
-
-        strongSelf.isStreamingImages = true
-        strongSelf.streamingPendingFramesCount = 0
-        completion(nil)
-      }
-    }
-  }
-
-  func stopImageStream() {
-    if isStreamingImages {
-      isStreamingImages = false
-      imageStreamHandler = nil
-    } else {
-      reportErrorMessage("Images from camera are not streaming!")
-    }
-  }
-
   func captureOutput(
     _ output: AVCaptureOutput,
     didOutput sampleBuffer: CMSampleBuffer,
@@ -876,10 +350,22 @@ final class DefaultCamera: FLTCam, Camera {
   ) {
     if output == captureVideoOutput.avOutput {
       if let newBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-
         pixelBufferSynchronizationQueue.sync {
           latestPixelBuffer = newBuffer
         }
+
+        // Forward the frame to NV12 LastFrameStore and update per-frame metadata.
+        let aperture = Double(captureDevice.lensAperture())
+        let exposureNs = Int(captureDevice.exposureDuration().seconds * 1_000_000_000)
+        let iso = Double(captureDevice.iso())
+
+        lastFrameStore.updateMetadata(
+          aperture: aperture,
+          exposureTimeNs: exposureNs,
+          iso: iso
+        )
+
+        _ = lastFrameStore.accept(sampleBuffer)
 
         onFrameAvailable?()
       }
@@ -890,7 +376,21 @@ final class DefaultCamera: FLTCam, Camera {
       return
     }
 
-    handleSampleBufferStreaming(sampleBuffer)
+    if isStreamingImages {
+      if let eventSink = imageStreamHandler?.eventSink,
+        streamingPendingFramesCount < maxStreamingPendingFramesCount
+      {
+        streamingPendingFramesCount += 1
+
+        if let map = lastFrameStore.buildPreviewFrameMap(copyBytes: true) {
+          DispatchQueue.main.async {
+            eventSink(map)
+          }
+        } else {
+          // Nothing to send; let Dart decrement pending when it receives (kept for parity).
+        }
+      }
+    }
 
     if isRecording && !isRecordingPaused {
       if videoWriter?.status == .failed, let error = videoWriter?.error {
@@ -971,81 +471,6 @@ final class DefaultCamera: FLTCam, Camera {
     }
   }
 
-  private func handleSampleBufferStreaming(_ sampleBuffer: CMSampleBuffer) {
-    guard isStreamingImages,
-      let eventSink = imageStreamHandler?.eventSink,
-      streamingPendingFramesCount < maxStreamingPendingFramesCount
-    else {
-      return
-    }
-
-    // Non-pixel buffer samples, such as audio samples, are ignored for streaming
-    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-      return
-    }
-
-    streamingPendingFramesCount += 1
-
-    // Must lock base address before accessing the pixel data
-    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-
-    let imageWidth = CVPixelBufferGetWidth(pixelBuffer)
-    let imageHeight = CVPixelBufferGetHeight(pixelBuffer)
-
-    var planes: [[String: Any]] = []
-
-    let isPlanar = CVPixelBufferIsPlanar(pixelBuffer)
-    let planeCount = isPlanar ? CVPixelBufferGetPlaneCount(pixelBuffer) : 1
-
-    for i in 0..<planeCount {
-      let planeAddress: UnsafeMutableRawPointer?
-      let bytesPerRow: Int
-      let height: Int
-      let width: Int
-
-      if isPlanar {
-        planeAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, i)
-        bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, i)
-        height = CVPixelBufferGetHeightOfPlane(pixelBuffer, i)
-        width = CVPixelBufferGetWidthOfPlane(pixelBuffer, i)
-      } else {
-        planeAddress = CVPixelBufferGetBaseAddress(pixelBuffer)
-        bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-        height = CVPixelBufferGetHeight(pixelBuffer)
-        width = CVPixelBufferGetWidth(pixelBuffer)
-      }
-
-      let length = bytesPerRow * height
-      let bytes = Data(bytes: planeAddress!, count: length)
-
-      let planeBuffer: [String: Any] = [
-        "bytesPerRow": bytesPerRow,
-        "width": width,
-        "height": height,
-        "bytes": FlutterStandardTypedData(bytes: bytes),
-      ]
-      planes.append(planeBuffer)
-    }
-
-    // Lock the base address before accessing pixel data, and unlock it afterwards.
-    // Done accessing the `pixelBuffer` at this point.
-    CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
-
-    let imageBuffer: [String: Any] = [
-      "width": imageWidth,
-      "height": imageHeight,
-      "format": videoFormat,
-      "planes": planes,
-      "lensAperture": Double(captureDevice.lensAperture()),
-      "sensorExposureTime": Int(captureDevice.exposureDuration().seconds * 1_000_000_000),
-      "sensorSensitivity": Double(captureDevice.iso()),
-    ]
-
-    DispatchQueue.main.async {
-      eventSink(imageBuffer)
-    }
-  }
-
   private func copySampleBufferWithAdjustedTime(_ sample: CMSampleBuffer, by offset: CMTime)
     -> CMSampleBuffer?
   {
@@ -1091,6 +516,258 @@ final class DefaultCamera: FLTCam, Camera {
     }
   }
 
+  func capturePreviewFrame(completion: @escaping ([String: Any]?, FlutterError?) -> Void) {
+    if let map = lastFrameStore.buildPreviewFrameMap(copyBytes: true) {
+      completion(map, nil)
+    } else {
+      completion(nil, FlutterError(code: "no_image", message: "No image available", details: nil))
+    }
+  }
+
+  func saveJpegAsJpeg(
+    withImageData imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    quality: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    guard let formatRaw = imageData["format"] as? Int32 else {
+      completion(
+        nil, FlutterError(code: "missing_format", message: "Image format is missing", details: nil))
+      return
+    }
+
+    let formatUInt = UInt32(formatRaw)
+
+    switch formatUInt {
+    case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
+      handleYuv420(
+        imageData: imageData,
+        outputPath: outputPath,
+        rotationDegrees: rotationDegrees,
+        quality: quality,
+        completion: completion
+      )
+
+    case kCVPixelFormatType_32BGRA:
+      handleBgra8888(
+        imageData: imageData,
+        outputPath: outputPath,
+        rotationDegrees: rotationDegrees,
+        quality: quality,
+        completion: completion
+      )
+
+    default:
+      completion(
+        nil,
+        FlutterError(
+          code: "unsupported_format",
+          message: "Unsupported image format: \(formatRaw)",
+          details: nil
+        )
+      )
+    }
+  }
+
+  private func handleYuv420(
+    imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    quality: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    guard let width = imageData["width"] as? Int,
+      let height = imageData["height"] as? Int,
+      let planes = imageData["planes"] as? [[String: Any]],
+      planes.count == 2,
+      let yData = (planes[0]["bytes"] as? FlutterStandardTypedData)?.data,
+      let uvData = (planes[1]["bytes"] as? FlutterStandardTypedData)?.data
+    else {
+      completion(
+        nil, FlutterError(code: "invalid_data", message: "Invalid NV12 data", details: nil))
+      return
+    }
+
+    var pixelBuffer: CVPixelBuffer?
+    let attrs: [CFString: Any] = [
+      kCVPixelBufferCGImageCompatibilityKey: true,
+      kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+      kCVPixelBufferIOSurfacePropertiesKey: [:],
+    ]
+    let status = CVPixelBufferCreate(
+      nil,
+      width,
+      height,
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+      attrs as CFDictionary,
+      &pixelBuffer
+    )
+
+    guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
+      completion(
+        nil,
+        FlutterError(code: "pixel_buffer", message: "Failed to create CVPixelBuffer", details: nil))
+      return
+    }
+
+    CVPixelBufferLockBaseAddress(buffer, [])
+
+    let yPlane = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)!
+    let uvPlane = CVPixelBufferGetBaseAddressOfPlane(buffer, 1)!
+
+    yData.copyBytes(to: yPlane.assumingMemoryBound(to: UInt8.self), count: yData.count)
+    uvData.copyBytes(to: uvPlane.assumingMemoryBound(to: UInt8.self), count: uvData.count)
+
+    CVPixelBufferUnlockBaseAddress(buffer, [])
+
+    let ciImage = CIImage(cvPixelBuffer: buffer)
+    saveCIImage(
+      ciImage, to: outputPath, rotationDegrees: rotationDegrees, quality: quality,
+      completion: completion)
+  }
+
+  private func handleBgra8888(
+    imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    quality: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    guard let width = imageData["width"] as? Int,
+      let height = imageData["height"] as? Int,
+      let planes = imageData["planes"] as? [[String: Any]],
+      let bytes = (planes[0]["bytes"] as? FlutterStandardTypedData)?.data
+    else {
+      completion(
+        nil, FlutterError(code: "invalid_data", message: "Invalid BGRA data", details: nil))
+      return
+    }
+
+    let bytesPerRow = planes[0]["bytesPerRow"] as? Int ?? width * 4
+
+    guard let provider = CGDataProvider(data: bytes as CFData) else {
+      completion(
+        nil,
+        FlutterError(
+          code: "provider_error", message: "Failed to create CGDataProvider", details: nil)
+      )
+      return
+    }
+
+    let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
+      .union(.byteOrder32Little)
+
+    guard
+      let cgImage = CGImage(
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bitsPerPixel: 32,
+        bytesPerRow: bytesPerRow,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: bitmapInfo,
+        provider: provider,
+        decode: nil,
+        shouldInterpolate: true,
+        intent: .defaultIntent
+      )
+    else {
+      completion(
+        nil, FlutterError(code: "cgimage", message: "Failed to create CGImage", details: nil))
+      return
+    }
+
+    let ciImage = CIImage(cgImage: cgImage)
+    saveCIImage(
+      ciImage, to: outputPath, rotationDegrees: rotationDegrees, quality: quality,
+      completion: completion)
+  }
+
+  private func saveCIImage(
+    _ ciImage: CIImage,
+    to outputPath: String,
+    rotationDegrees: Int32,
+    quality: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    let rotated: CIImage
+    switch rotationDegrees {
+    case 90:
+      rotated = ciImage.oriented(.right)
+    case 180:
+      rotated = ciImage.oriented(.down)
+    case 270:
+      rotated = ciImage.oriented(.left)
+    default:
+      rotated = ciImage
+    }
+
+    let context = CIContext()
+
+    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+      let cgImage = context.createCGImage(
+        rotated, from: rotated.extent, format: .RGBA8, colorSpace: colorSpace)
+    else {
+      completion(
+        nil, FlutterError(code: "render_failed", message: "Failed to render CGImage", details: nil))
+      return
+    }
+
+    // Clamp and convert quality (0–100) to CGFloat (0.0–1.0)
+    let clampedQuality = max(0, min(quality, 100))
+    let compressionQuality = CGFloat(clampedQuality) / 100.0
+
+    guard let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: compressionQuality)
+    else {
+      completion(
+        nil, FlutterError(code: "encode_failed", message: "Failed to encode JPEG", details: nil))
+      return
+    }
+
+    do {
+      try jpegData.write(to: URL(fileURLWithPath: outputPath))
+      completion(outputPath, nil)
+    } catch {
+      completion(
+        nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  func capturePreviewFrameJpeg(
+    outputPath: String, rotationDegrees: Int32,
+    quality: Int32, completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    do {
+      let path = try lastFrameStore.writeJpeg(
+        to: outputPath,
+        rotationDegrees: Int(rotationDegrees),
+        quality: Int(quality)
+      )
+      completion(path, nil)
+    } catch {
+      completion(
+        nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  func setUpCaptureSessionForVideoIfNeeded() {
+    guard !videoCaptureSession.outputs.contains(where: { $0 is AVCaptureVideoDataOutput }) else {
+      return
+    }
+
+    let videoDataOutput = AVCaptureVideoDataOutput()
+    videoDataOutput.videoSettings = [
+      (kCVPixelBufferPixelFormatTypeKey as String): Int(videoFormat)
+    ]
+    videoDataOutput.setSampleBufferDelegate(self, queue: pixelBufferSynchronizationQueue)
+
+    if videoCaptureSession.canAddOutput(videoDataOutput) {
+      videoCaptureSession.addOutput(videoDataOutput)
+    }
+  }
+
   func close() {
     stop()
     for input in videoCaptureSession.inputs {
@@ -1108,31 +785,84 @@ final class DefaultCamera: FLTCam, Camera {
   }
 
   func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
-    var pixelBuffer: CVPixelBuffer?
+    var copied: CVPixelBuffer?
+
     pixelBufferSynchronizationQueue.sync {
-      pixelBuffer = latestPixelBuffer
-      latestPixelBuffer = nil
+      guard let src = latestPixelBuffer else {
+        return
+      }
+
+      let width = CVPixelBufferGetWidth(src)
+      let height = CVPixelBufferGetHeight(src)
+      let pixelFormat = CVPixelBufferGetPixelFormatType(src)
+
+      let attrs: CFDictionary =
+        [
+          kCVPixelBufferIOSurfacePropertiesKey: [:]
+        ] as CFDictionary
+
+      var dst: CVPixelBuffer?
+      let status = CVPixelBufferCreate(
+        nil,
+        width,
+        height,
+        pixelFormat,
+        attrs,
+        &dst
+      )
+
+      guard status == kCVReturnSuccess, let dstBuffer = dst else {
+        return
+      }
+
+      CVPixelBufferLockBaseAddress(src, .readOnly)
+      CVPixelBufferLockBaseAddress(dstBuffer, [])
+
+      let isPlanar = CVPixelBufferIsPlanar(src)
+      let planeCount = isPlanar ? CVPixelBufferGetPlaneCount(src) : 1
+
+      for i in 0..<planeCount {
+        let srcPtr =
+          isPlanar
+          ? CVPixelBufferGetBaseAddressOfPlane(src, i)
+          : CVPixelBufferGetBaseAddress(src)
+
+        let dstPtr =
+          isPlanar
+          ? CVPixelBufferGetBaseAddressOfPlane(dstBuffer, i)
+          : CVPixelBufferGetBaseAddress(dstBuffer)
+
+        let height =
+          isPlanar
+          ? CVPixelBufferGetHeightOfPlane(src, i)
+          : CVPixelBufferGetHeight(src)
+
+        let bytesPerRow =
+          isPlanar
+          ? CVPixelBufferGetBytesPerRowOfPlane(src, i)
+          : CVPixelBufferGetBytesPerRow(src)
+
+        memcpy(dstPtr, srcPtr, height * bytesPerRow)
+      }
+
+      CVPixelBufferUnlockBaseAddress(dstBuffer, [])
+      CVPixelBufferUnlockBaseAddress(src, .readOnly)
+
+      copied = dstBuffer
     }
 
-    if let buffer = pixelBuffer {
-      return Unmanaged.passRetained(buffer)
+    if let c = copied {
+      return Unmanaged.passRetained(c)
     } else {
       return nil
     }
   }
 
-  /// Reports the given error message to the Dart side of the plugin.
-  ///
-  /// Can be called from any thread.
   private func reportErrorMessage(_ errorMessage: String) {
     FLTEnsureToRunOnMainQueue { [weak self] in
       self?.dartAPI?.reportError(errorMessage) { _ in
         // Ignore any errors, as this is just an event broadcast.
       }
     }
-  }
-
-  deinit {
-    motionManager.stopAccelerometerUpdates()
   }
 }
