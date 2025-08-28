@@ -31,4 +31,9 @@
 @property(readonly, nonatomic)
     NSMutableDictionary<NSNumber *, FLTSavePhotoDelegate *> *inProgressSavePhotoDelegates;
 
+/// Start streaming images.
+- (void)startImageStreamWithMessenger:(NSObject<FlutterBinaryMessenger> *)messenger
+                   imageStreamHandler:(FLTImageStreamHandler *)imageStreamHandler
+                           completion:(void (^)(FlutterError *))completion;
+
 @end
