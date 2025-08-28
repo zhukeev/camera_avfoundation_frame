@@ -1,0 +1,6 @@
+CHANGELOG.md
+README.md
+pubspec.yaml
+sync_upstream.sh
+.upstream-sync-exclude
+.upstream-sync-protect
