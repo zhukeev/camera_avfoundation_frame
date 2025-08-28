@@ -8,3 +8,11 @@ ios/camera_avfoundation_frame.podspec
 ios/camera_avfoundation_frame.podspec
 ios/camera_avfoundation_frame.podspec
 ios/camera_avfoundation_frame.podspec
+.git
+.github
+.gitignore
+.DS_Store
+.upstream_tmp
+.upstream_tmp/**
+.dart_tool/
+build/

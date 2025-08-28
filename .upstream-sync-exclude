@@ -8,3 +8,19 @@ test/*
 ios/camera_avfoundation/Sources/camera_avfoundation_objc/messages.g.m
 
 ios/camera_avfoundation.podspec
+*.g.dart
+*.freezed.dart
+*.mocks.dart
+*.gen.dart
+*.pb.dart
+*.pbjson.dart
+*.pbenum.dart
+*.pbserver.dart
+*.gr.dart
+*.graphql.dart
+*.chopper.dart
+*.g.h
+*.g.m
+*.g.mm
+.dart_tool/
+build/
