@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "./include/camera_avfoundation/FLTCaptureVideoDataOutput.h"
+#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTCaptureVideoDataOutput.h"
 
 @interface FLTDefaultCaptureVideoDataOutput ()
 @property(nonatomic, strong) AVCaptureVideoDataOutput *avOutput;

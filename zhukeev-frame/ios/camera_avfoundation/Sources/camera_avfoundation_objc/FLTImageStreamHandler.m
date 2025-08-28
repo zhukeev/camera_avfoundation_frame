@@ -4,7 +4,7 @@
 
 @import Flutter;
 
-#import "./include/camera_avfoundation/FLTImageStreamHandler.h"
+#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTImageStreamHandler.h"
 
 @implementation FLTImageStreamHandler
 

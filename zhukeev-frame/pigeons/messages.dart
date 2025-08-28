@@ -8,12 +8,12 @@ import 'package:pigeon/pigeon.dart';
   PigeonOptions(
     dartOut: 'lib/src/messages.g.dart',
     objcHeaderOut:
-        'ios/camera_avfoundation/Sources/camera_avfoundation_objc/include/camera_avfoundation/messages.g.h',
+        'ios/camera_avfoundation_frame_frame/Sources/camera_avfoundation_frame_frame_objc/include/camera_avfoundation_frame_frame/messages.g.h',
     objcSourceOut:
-        'ios/camera_avfoundation/Sources/camera_avfoundation_objc/messages.g.m',
+        'ios/camera_avfoundation_frame_frame/Sources/camera_avfoundation_frame_frame_objc/messages.g.m',
     objcOptions: ObjcOptions(
       prefix: 'FCP',
-      headerIncludePath: './include/camera_avfoundation/messages.g.h',
+      headerIncludePath: './include/camera_avfoundation_frame_frame/messages.g.h',
     ),
     copyrightHeader: 'pigeons/copyright.txt',
   ),

@@ -275,7 +275,7 @@ class AVFoundationCamera extends CameraPlatform {
 
   void _startStreamListener() {
     const EventChannel cameraEventChannel = EventChannel(
-      'plugins.flutter.io/camera_avfoundation/imageStream',
+      'plugins.flutter.io/camera_avfoundation_frame_frame/imageStream',
     );
     _platformImageStreamSubscription = cameraEventChannel
         .receiveBroadcastStream()

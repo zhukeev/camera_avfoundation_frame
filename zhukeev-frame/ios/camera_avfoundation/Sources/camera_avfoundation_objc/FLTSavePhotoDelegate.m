@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "./include/camera_avfoundation/FLTSavePhotoDelegate.h"
-#import "./include/camera_avfoundation/FLTSavePhotoDelegate_Test.h"
+#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTSavePhotoDelegate.h"
+#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTSavePhotoDelegate_Test.h"
 
 @interface FLTSavePhotoDelegate ()
 /// The file path for the captured photo.

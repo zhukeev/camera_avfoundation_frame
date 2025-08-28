@@ -5,7 +5,7 @@
 @import Foundation;
 @import AVFoundation;
 
-#import "./include/camera_avfoundation/FLTFormatUtils.h"
+#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTFormatUtils.h"
 
 NS_ASSUME_NONNULL_BEGIN
 

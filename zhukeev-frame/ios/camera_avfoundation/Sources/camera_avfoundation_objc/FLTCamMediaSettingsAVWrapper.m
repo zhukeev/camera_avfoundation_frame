@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#import "./include/camera_avfoundation/FLTCamMediaSettingsAVWrapper.h"
-#import "./include/camera_avfoundation/FLTAssetWriter.h"
-#import "./include/camera_avfoundation/FLTCaptureDevice.h"
-#import "./include/camera_avfoundation/FLTCaptureSession.h"
+#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTCamMediaSettingsAVWrapper.h"
+#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTAssetWriter.h"
+#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTCaptureDevice.h"
+#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTCaptureSession.h"
 
 @implementation FLTCamMediaSettingsAVWrapper
 
