@@ -200,6 +200,20 @@ final class DefaultCamera: FLTCam, Camera {
     }
   }
 
+  func receivedImageStreamData() {
+    streamingPendingFramesCount -= 1
+  }
+
+  func start() {
+    videoCaptureSession.startRunning()
+    audioCaptureSession.startRunning()
+  }
+
+  func stop() {
+    videoCaptureSession.stopRunning()
+    audioCaptureSession.stopRunning()
+  }
+
   func startVideoRecording(
     completion: @escaping (FlutterError?) -> Void,
     messengerForStreaming messenger: FlutterBinaryMessenger?
@@ -348,19 +362,6 @@ final class DefaultCamera: FLTCam, Camera {
 
 
 
-  func receivedImageStreamData() {
-    streamingPendingFramesCount -= 1
-  }
-
-  func start() {
-    videoCaptureSession.startRunning()
-    audioCaptureSession.startRunning()
-  }
-
-  func stop() {
-    videoCaptureSession.stopRunning()
-    audioCaptureSession.stopRunning()
-  }
 
   func pauseVideoRecording() {
     isRecordingPaused = true
@@ -873,8 +874,6 @@ final class DefaultCamera: FLTCam, Camera {
     }
   }
 
-
-
   func captureOutput(
     _ output: AVCaptureOutput,
     didOutput sampleBuffer: CMSampleBuffer,
@@ -1077,8 +1076,6 @@ final class DefaultCamera: FLTCam, Camera {
       eventSink(imageBuffer)
     }
   }
-
-
 
   private func copySampleBufferWithAdjustedTime(_ sample: CMSampleBuffer, by offset: CMTime)
     -> CMSampleBuffer?
@@ -1394,7 +1391,7 @@ final class DefaultCamera: FLTCam, Camera {
   }
 
   func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
-    var copied: CVPixelBuffer?
+    var pixelBuffer: CVPixelBuffer?
 
     pixelBufferSynchronizationQueue.sync {
       guard let src = latestPixelBuffer else {
@@ -1457,16 +1454,19 @@ final class DefaultCamera: FLTCam, Camera {
       CVPixelBufferUnlockBaseAddress(dstBuffer, [])
       CVPixelBufferUnlockBaseAddress(src, .readOnly)
 
-      copied = dstBuffer
+      pixelBuffer = dstBuffer
     }
 
-    if let c = copied {
-      return Unmanaged.passRetained(c)
+    if let buffer = pixelBuffer {
+      return Unmanaged.passRetained(buffer)
     } else {
       return nil
     }
   }
 
+  /// Reports the given error message to the Dart side of the plugin.
+  ///
+  /// Can be called from any thread.
   private func reportErrorMessage(_ errorMessage: String) {
     FLTEnsureToRunOnMainQueue { [weak self] in
       self?.dartAPI?.reportError(errorMessage) { _ in
@@ -1474,7 +1474,8 @@ final class DefaultCamera: FLTCam, Camera {
       }
     }
   }
-   deinit {
+
+  deinit {
     motionManager.stopAccelerometerUpdates()
   }
 }
