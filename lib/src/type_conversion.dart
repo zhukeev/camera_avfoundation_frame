@@ -4,26 +4,42 @@
 
 import 'dart:typed_data';
 
-import 'package:camera_platform_interface/camera_platform_interface.dart';
+import 'package:camera_platform_interface_frame/camera_platform_interface_frame.dart';
 
 /// Converts method channel call [data] for `receivedImageStreamData` to a
 /// [CameraImageData].
 CameraImageData cameraImageFromPlatformData(Map<dynamic, dynamic> data) {
   return CameraImageData(
-    format: _cameraImageFormatFromPlatformData(data['format']),
-    height: data['height'] as int,
-    width: data['width'] as int,
-    lensAperture: data['lensAperture'] as double?,
-    sensorExposureTime: data['sensorExposureTime'] as int?,
-    sensorSensitivity: data['sensorSensitivity'] as double?,
-    planes: List<CameraImagePlane>.unmodifiable(
-      (data['planes'] as List<dynamic>).map<CameraImagePlane>(
-        (dynamic planeData) => _cameraImagePlaneFromPlatformData(
-          planeData as Map<dynamic, dynamic>,
-        ),
-      ),
-    ),
-  );
+      format: _cameraImageFormatFromPlatformData(data['format']),
+      height: data['height'] as int,
+      width: data['width'] as int,
+      lensAperture: data['lensAperture'] as double?,
+      sensorExposureTime: data['sensorExposureTime'] as int?,
+      sensorSensitivity: data['sensorSensitivity'] as double?,
+      planes: List<CameraImagePlane>.unmodifiable(
+          (data['planes'] as List<dynamic>).map<CameraImagePlane>(
+              (dynamic planeData) => _cameraImagePlaneFromPlatformData(
+                  planeData as Map<dynamic, dynamic>))));
+}
+
+Map<String, Object?> cameraImageToPlatformData(CameraImageData data) {
+  return <String, Object?>{
+    'format': data.format.raw,
+    'height': data.height,
+    'width': data.width,
+    'lensAperture': data.lensAperture,
+    'sensorExposureTime': data.sensorExposureTime,
+    'sensorSensitivity': data.sensorSensitivity,
+    'planes': data.planes.map((CameraImagePlane plane) {
+      return <String, Object?>{
+        'bytes': plane.bytes,
+        'bytesPerPixel': plane.bytesPerPixel,
+        'bytesPerRow': plane.bytesPerRow,
+        'height': plane.height,
+        'width': plane.width,
+      };
+    }).toList(),
+  };
 }
 
 CameraImageFormat _cameraImageFormatFromPlatformData(dynamic data) {
@@ -44,10 +60,9 @@ ImageFormatGroup _imageFormatGroupFromPlatformData(dynamic data) {
 
 CameraImagePlane _cameraImagePlaneFromPlatformData(Map<dynamic, dynamic> data) {
   return CameraImagePlane(
-    bytes: data['bytes'] as Uint8List,
-    bytesPerPixel: data['bytesPerPixel'] as int?,
-    bytesPerRow: data['bytesPerRow'] as int,
-    height: data['height'] as int?,
-    width: data['width'] as int?,
-  );
+      bytes: data['bytes'] as Uint8List,
+      bytesPerPixel: data['bytesPerPixel'] as int?,
+      bytesPerRow: data['bytesPerRow'] as int,
+      height: data['height'] as int?,
+      width: data['width'] as int?);
 }

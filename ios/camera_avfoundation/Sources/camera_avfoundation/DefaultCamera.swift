@@ -57,6 +57,8 @@ final class DefaultCamera: FLTCam, Camera {
   private var exposureMode = FCPPlatformExposureMode.auto
   private var focusMode = FCPPlatformFocusMode.auto
 
+  private let lastFrameStore = LastFrameStore()
+
   private static func flutterErrorFromNSError(_ error: NSError) -> FlutterError {
     return FlutterError(
       code: "Error \(error.code)",
@@ -881,6 +883,19 @@ final class DefaultCamera: FLTCam, Camera {
           latestPixelBuffer = newBuffer
         }
 
+        // Forward the frame to NV12 LastFrameStore and update per-frame metadata.
+        let aperture = Double(captureDevice.lensAperture())
+        let exposureNs = Int(captureDevice.exposureDuration().seconds * 1_000_000_000)
+        let iso = Double(captureDevice.iso())
+
+        lastFrameStore.updateMetadata(
+          aperture: aperture,
+          exposureTimeNs: exposureNs,
+          iso: iso
+        )
+
+        _ = lastFrameStore.accept(sampleBuffer)
+
         onFrameAvailable?()
       }
     }
@@ -1088,6 +1103,258 @@ final class DefaultCamera: FLTCam, Camera {
       if !(audioWriterInput?.append(sampleBuffer) ?? false) {
         reportErrorMessage("Unable to write to audio input")
       }
+    }
+  }
+
+  func capturePreviewFrame(completion: @escaping ([String: Any]?, FlutterError?) -> Void) {
+    if let map = lastFrameStore.buildPreviewFrameMap(copyBytes: true) {
+      completion(map, nil)
+    } else {
+      completion(nil, FlutterError(code: "no_image", message: "No image available", details: nil))
+    }
+  }
+
+  func saveJpegAsJpeg(
+    withImageData imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    quality: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    guard let formatRaw = imageData["format"] as? Int32 else {
+      completion(
+        nil, FlutterError(code: "missing_format", message: "Image format is missing", details: nil))
+      return
+    }
+
+    let formatUInt = UInt32(formatRaw)
+
+    switch formatUInt {
+    case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
+      handleYuv420(
+        imageData: imageData,
+        outputPath: outputPath,
+        rotationDegrees: rotationDegrees,
+        quality: quality,
+        completion: completion
+      )
+
+    case kCVPixelFormatType_32BGRA:
+      handleBgra8888(
+        imageData: imageData,
+        outputPath: outputPath,
+        rotationDegrees: rotationDegrees,
+        quality: quality,
+        completion: completion
+      )
+
+    default:
+      completion(
+        nil,
+        FlutterError(
+          code: "unsupported_format",
+          message: "Unsupported image format: \(formatRaw)",
+          details: nil
+        )
+      )
+    }
+  }
+
+  private func handleYuv420(
+    imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    quality: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    guard let width = imageData["width"] as? Int,
+      let height = imageData["height"] as? Int,
+      let planes = imageData["planes"] as? [[String: Any]],
+      planes.count == 2,
+      let yData = (planes[0]["bytes"] as? FlutterStandardTypedData)?.data,
+      let uvData = (planes[1]["bytes"] as? FlutterStandardTypedData)?.data
+    else {
+      completion(
+        nil, FlutterError(code: "invalid_data", message: "Invalid NV12 data", details: nil))
+      return
+    }
+
+    var pixelBuffer: CVPixelBuffer?
+    let attrs: [CFString: Any] = [
+      kCVPixelBufferCGImageCompatibilityKey: true,
+      kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+      kCVPixelBufferIOSurfacePropertiesKey: [:],
+    ]
+    let status = CVPixelBufferCreate(
+      nil,
+      width,
+      height,
+      kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+      attrs as CFDictionary,
+      &pixelBuffer
+    )
+
+    guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
+      completion(
+        nil,
+        FlutterError(code: "pixel_buffer", message: "Failed to create CVPixelBuffer", details: nil))
+      return
+    }
+
+    CVPixelBufferLockBaseAddress(buffer, [])
+
+    let yPlane = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)!
+    let uvPlane = CVPixelBufferGetBaseAddressOfPlane(buffer, 1)!
+
+    yData.copyBytes(to: yPlane.assumingMemoryBound(to: UInt8.self), count: yData.count)
+    uvData.copyBytes(to: uvPlane.assumingMemoryBound(to: UInt8.self), count: uvData.count)
+
+    CVPixelBufferUnlockBaseAddress(buffer, [])
+
+    let ciImage = CIImage(cvPixelBuffer: buffer)
+    saveCIImage(
+      ciImage, to: outputPath, rotationDegrees: rotationDegrees, quality: quality,
+      completion: completion)
+  }
+
+  private func handleBgra8888(
+    imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    quality: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    guard let width = imageData["width"] as? Int,
+      let height = imageData["height"] as? Int,
+      let planes = imageData["planes"] as? [[String: Any]],
+      let bytes = (planes[0]["bytes"] as? FlutterStandardTypedData)?.data
+    else {
+      completion(
+        nil, FlutterError(code: "invalid_data", message: "Invalid BGRA data", details: nil))
+      return
+    }
+
+    let bytesPerRow = planes[0]["bytesPerRow"] as? Int ?? width * 4
+
+    guard let provider = CGDataProvider(data: bytes as CFData) else {
+      completion(
+        nil,
+        FlutterError(
+          code: "provider_error", message: "Failed to create CGDataProvider", details: nil)
+      )
+      return
+    }
+
+    let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
+      .union(.byteOrder32Little)
+
+    guard
+      let cgImage = CGImage(
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bitsPerPixel: 32,
+        bytesPerRow: bytesPerRow,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: bitmapInfo,
+        provider: provider,
+        decode: nil,
+        shouldInterpolate: true,
+        intent: .defaultIntent
+      )
+    else {
+      completion(
+        nil, FlutterError(code: "cgimage", message: "Failed to create CGImage", details: nil))
+      return
+    }
+
+    let ciImage = CIImage(cgImage: cgImage)
+    saveCIImage(
+      ciImage, to: outputPath, rotationDegrees: rotationDegrees, quality: quality,
+      completion: completion)
+  }
+
+  private func saveCIImage(
+    _ ciImage: CIImage,
+    to outputPath: String,
+    rotationDegrees: Int32,
+    quality: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    let rotated: CIImage
+    switch rotationDegrees {
+    case 90:
+      rotated = ciImage.oriented(.right)
+    case 180:
+      rotated = ciImage.oriented(.down)
+    case 270:
+      rotated = ciImage.oriented(.left)
+    default:
+      rotated = ciImage
+    }
+
+    let context = CIContext()
+
+    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+      let cgImage = context.createCGImage(
+        rotated, from: rotated.extent, format: .RGBA8, colorSpace: colorSpace)
+    else {
+      completion(
+        nil, FlutterError(code: "render_failed", message: "Failed to render CGImage", details: nil))
+      return
+    }
+
+    // Clamp and convert quality (0–100) to CGFloat (0.0–1.0)
+    let clampedQuality = max(0, min(quality, 100))
+    let compressionQuality = CGFloat(clampedQuality) / 100.0
+
+    guard let jpegData = UIImage(cgImage: cgImage).jpegData(compressionQuality: compressionQuality)
+    else {
+      completion(
+        nil, FlutterError(code: "encode_failed", message: "Failed to encode JPEG", details: nil))
+      return
+    }
+
+    do {
+      try jpegData.write(to: URL(fileURLWithPath: outputPath))
+      completion(outputPath, nil)
+    } catch {
+      completion(
+        nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  func capturePreviewFrameJpeg(
+    outputPath: String, rotationDegrees: Int32,
+    quality: Int32, completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    do {
+      let path = try lastFrameStore.writeJpeg(
+        to: outputPath,
+        rotationDegrees: Int(rotationDegrees),
+        quality: Int(quality)
+      )
+      completion(path, nil)
+    } catch {
+      completion(
+        nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  func setUpCaptureSessionForVideoIfNeeded() {
+    guard !videoCaptureSession.outputs.contains(where: { $0 is AVCaptureVideoDataOutput }) else {
+      return
+    }
+
+    let videoDataOutput = AVCaptureVideoDataOutput()
+    videoDataOutput.videoSettings = [
+      (kCVPixelBufferPixelFormatTypeKey as String): Int(videoFormat)
+    ]
+    videoDataOutput.setSampleBufferDelegate(self, queue: pixelBufferSynchronizationQueue)
+
+    if videoCaptureSession.canAddOutput(videoDataOutput) {
+      videoCaptureSession.addOutput(videoDataOutput)
     }
   }
 
