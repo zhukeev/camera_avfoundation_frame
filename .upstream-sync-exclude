@@ -1,0 +1,9 @@
+CHANGELOG.md
+README.md
+pubspec.yaml
+lib/camera_avfoundation.dart
+lib/src/messages.g.dart
+example/*
+test/*
+ios/camera_avfoundation/Sources/camera_avfoundation_objc/messages.g.m
+ios/camera_avfoundation.podspec
