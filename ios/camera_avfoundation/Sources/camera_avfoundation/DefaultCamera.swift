@@ -885,7 +885,7 @@ final class DefaultCamera: FLTCam, Camera {
 
         // Forward the frame to NV12 LastFrameStore and update per-frame metadata.
         let aperture = Double(captureDevice.lensAperture())
-        let exposureNs = Int(captureDevice.exposureDuration().seconds * 1_000_000_000)
+        let exposureNs = Int64(captureDevice.exposureDuration().seconds * 1_000_000_000)
         let iso = Double(captureDevice.iso())
 
         lastFrameStore.updateMetadata(
