@@ -905,23 +905,6 @@ final class DefaultCamera: FLTCam, Camera {
       return
     }
 
-    if isStreamingImages {
-      if let eventSink = imageStreamHandler?.eventSink,
-        streamingPendingFramesCount < maxStreamingPendingFramesCount
-      {
-        streamingPendingFramesCount += 1
-
-        if let map = lastFrameStore.buildPreviewFrameMap(copyBytes: true) {
-          DispatchQueue.main.async {
-            eventSink(map)
-          }
-        } else {
-          // Nothing to send; let Dart decrement pending when it receives (kept for parity).
-        }
-      }
-    }
-
-
     handleSampleBufferStreaming(sampleBuffer)
 
     if isRecording && !isRecordingPaused {
