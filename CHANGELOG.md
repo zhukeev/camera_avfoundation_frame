@@ -1,23 +1,35 @@
-## 0.9.20+8
+## NEXT
 
-* feat: implement LastFrameStore for caching and managing the latest frame metadata
+* Updates minimum supported SDK version to Flutter 3.29/Dart 3.7.
+
+## 0.9.21+1
+
+* Migrates `startImageStream` and `setUpCaptureSessionForAudioIfNeeded` methods to Swift.
+* Removes Objective-C implementation of `reportErrorMessage` method.
+
+## 0.9.21
+
+* Fixes crash when streaming is enabled during recording.
 
 ## 0.9.20+7
 
-* updated camera_platform_interface_frame to ^2.10.9
+* Updates kotlin version to 2.2.0 to enable gradle 8.11 support.
 
 ## 0.9.20+6
 
-* updated camera_platform_interface_frame to ^2.10.7
+* Migrates `captureToFile` and `getTemporaryFilePath` methods to Swift.
+* Switches to Swift dispatch queue specific interface.
 
 ## 0.9.20+5
 
-* updated camera_platform_interface_frame
+* Migrates `startVideoRecording`, `setUpVideoRecording`, and `setupWriter` methods to Swift.
 
 ## 0.9.20+4
 
-* **`saveJpegAsJpeg(imageData, outputPath, rotationDegrees)`**  
-  Converts a raw preview frame (YUV420 or BGRA8888) received from the stream into a JPEG file and saves it to the specified path.
+* Migrates `setVideoFormat`,`stopVideoRecording`, and `stopImageStream` methods to Swift.
+* Migrates stopping accelerometer updates to Swift.
+* Migrates `setDescriptionWhileRecording` method to Swift.
+* Adds `createConnection` method implementation to Swift.
 
 ## 0.9.20+3
 

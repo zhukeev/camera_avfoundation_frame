@@ -6,9 +6,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:camera_avfoundation_frame/camera_avfoundation_frame.dart';
-// import 'package:camera_example/camera_controller.dart';
-import 'package:camera_platform_interface_frame/camera_platform_interface_frame.dart';
+import 'package:camera_avfoundation/camera_avfoundation.dart';
+import 'package:camera_example/camera_controller.dart';
+import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -30,14 +30,15 @@ void main() {
     await testDir.delete(recursive: true);
   });
 
-  final Map<ResolutionPreset, Size> presetExpectedSizes = <ResolutionPreset, Size>{
-    ResolutionPreset.low: const Size(288, 352),
-    ResolutionPreset.medium: const Size(480, 640),
-    ResolutionPreset.high: const Size(720, 1280),
-    ResolutionPreset.veryHigh: const Size(1080, 1920),
-    ResolutionPreset.ultraHigh: const Size(2160, 3840),
-    // Don't bother checking for max here since it could be anything.
-  };
+  final Map<ResolutionPreset, Size> presetExpectedSizes =
+      <ResolutionPreset, Size>{
+        ResolutionPreset.low: const Size(288, 352),
+        ResolutionPreset.medium: const Size(480, 640),
+        ResolutionPreset.high: const Size(720, 1280),
+        ResolutionPreset.veryHigh: const Size(1080, 1920),
+        ResolutionPreset.ultraHigh: const Size(2160, 3840),
+        // Don't bother checking for max here since it could be anything.
+      };
 
   /// Verify that [actual] has dimensions that are at least as large as
   /// [expectedSize]. Allows for a mismatch in portrait vs landscape. Returns
@@ -45,13 +46,17 @@ void main() {
   bool assertExpectedDimensions(Size expectedSize, Size actual) {
     expect(actual.shortestSide, lessThanOrEqualTo(expectedSize.shortestSide));
     expect(actual.longestSide, lessThanOrEqualTo(expectedSize.longestSide));
-    return actual.shortestSide == expectedSize.shortestSide && actual.longestSide == expectedSize.longestSide;
+    return actual.shortestSide == expectedSize.shortestSide &&
+        actual.longestSide == expectedSize.longestSide;
   }
 
   // This tests that the capture is no bigger than the preset, since we have
   // automatic code to fall back to smaller sizes when we need to. Returns
   // whether the image is exactly the desired resolution.
-  Future<bool> testCaptureImageResolution(CameraController controller, ResolutionPreset preset) async {
+  Future<bool> testCaptureImageResolution(
+    CameraController controller,
+    ResolutionPreset preset,
+  ) async {
     final Size expectedSize = presetExpectedSizes[preset]!;
 
     // Take Picture
@@ -63,25 +68,37 @@ void main() {
 
     // Verify image dimensions are as expected
     expect(image, isNotNull);
-    return assertExpectedDimensions(expectedSize, Size(image.height.toDouble(), image.width.toDouble()));
+    return assertExpectedDimensions(
+      expectedSize,
+      Size(image.height.toDouble(), image.width.toDouble()),
+    );
   }
 
-  testWidgets('Capture specific image resolutions', (WidgetTester tester) async {
-    final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
+  testWidgets('Capture specific image resolutions', (
+    WidgetTester tester,
+  ) async {
+    final List<CameraDescription> cameras =
+        await CameraPlatform.instance.availableCameras();
     if (cameras.isEmpty) {
       return;
     }
     for (final CameraDescription cameraDescription in cameras) {
       bool previousPresetExactlySupported = true;
-      for (final MapEntry<ResolutionPreset, Size> preset in presetExpectedSizes.entries) {
+      for (final MapEntry<ResolutionPreset, Size> preset
+          in presetExpectedSizes.entries) {
         final CameraController controller = CameraController(
           cameraDescription,
-          mediaSettings: MediaSettings(resolutionPreset: preset.key),
+          preset.key,
         );
         await controller.initialize();
-        final bool presetExactlySupported = await testCaptureImageResolution(controller, preset.key);
-        assert(!(!previousPresetExactlySupported && presetExactlySupported),
-            'The camera took higher resolution pictures at a lower resolution.');
+        final bool presetExactlySupported = await testCaptureImageResolution(
+          controller,
+          preset.key,
+        );
+        assert(
+          !(!previousPresetExactlySupported && presetExactlySupported),
+          'The camera took higher resolution pictures at a lower resolution.',
+        );
         previousPresetExactlySupported = presetExactlySupported;
         await controller.dispose();
       }
@@ -91,7 +108,10 @@ void main() {
   // This tests that the capture is no bigger than the preset, since we have
   // automatic code to fall back to smaller sizes when we need to. Returns
   // whether the image is exactly the desired resolution.
-  Future<bool> testCaptureVideoResolution(CameraController controller, ResolutionPreset preset) async {
+  Future<bool> testCaptureVideoResolution(
+    CameraController controller,
+    ResolutionPreset preset,
+  ) async {
     final Size expectedSize = presetExpectedSizes[preset]!;
 
     // Take Video
@@ -101,32 +121,46 @@ void main() {
 
     // Load video metadata
     final File videoFile = File(file.path);
-    final VideoPlayerController videoController = VideoPlayerController.file(videoFile);
+    final VideoPlayerController videoController = VideoPlayerController.file(
+      videoFile,
+    );
     await videoController.initialize();
     final Size video = videoController.value.size;
 
     // Verify image dimensions are as expected
     expect(video, isNotNull);
-    return assertExpectedDimensions(expectedSize, Size(video.height, video.width));
+    return assertExpectedDimensions(
+      expectedSize,
+      Size(video.height, video.width),
+    );
   }
 
-  testWidgets('Capture specific video resolutions', (WidgetTester tester) async {
-    final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
+  testWidgets('Capture specific video resolutions', (
+    WidgetTester tester,
+  ) async {
+    final List<CameraDescription> cameras =
+        await CameraPlatform.instance.availableCameras();
     if (cameras.isEmpty) {
       return;
     }
     for (final CameraDescription cameraDescription in cameras) {
       bool previousPresetExactlySupported = true;
-      for (final MapEntry<ResolutionPreset, Size> preset in presetExpectedSizes.entries) {
+      for (final MapEntry<ResolutionPreset, Size> preset
+          in presetExpectedSizes.entries) {
         final CameraController controller = CameraController(
           cameraDescription,
-          mediaSettings: MediaSettings(resolutionPreset: preset.key),
+          preset.key,
         );
         await controller.initialize();
         await controller.prepareForVideoRecording();
-        final bool presetExactlySupported = await testCaptureVideoResolution(controller, preset.key);
-        assert(!(!previousPresetExactlySupported && presetExactlySupported),
-            'The camera took higher resolution pictures at a lower resolution.');
+        final bool presetExactlySupported = await testCaptureVideoResolution(
+          controller,
+          preset.key,
+        );
+        assert(
+          !(!previousPresetExactlySupported && presetExactlySupported),
+          'The camera took higher resolution pictures at a lower resolution.',
+        );
         previousPresetExactlySupported = presetExactlySupported;
         await controller.dispose();
       }
@@ -134,14 +168,16 @@ void main() {
   });
 
   testWidgets('Pause and resume video recording', (WidgetTester tester) async {
-    final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
+    final List<CameraDescription> cameras =
+        await CameraPlatform.instance.availableCameras();
     if (cameras.isEmpty) {
       return;
     }
 
     final CameraController controller = CameraController(
       cameras[0],
-      mediaSettings: MediaSettings(resolutionPreset: ResolutionPreset.low),
+      ResolutionPreset.low,
+      enableAudio: false,
     );
 
     await controller.initialize();
@@ -171,7 +207,8 @@ void main() {
     sleep(const Duration(milliseconds: 500));
 
     final XFile file = await controller.stopVideoRecording();
-    final int recordingTime = DateTime.now().millisecondsSinceEpoch - recordingStart;
+    final int recordingTime =
+        DateTime.now().millisecondsSinceEpoch - recordingStart;
 
     final File videoFile = File(file.path);
     final VideoPlayerController videoController = VideoPlayerController.file(
@@ -185,14 +222,16 @@ void main() {
   });
 
   testWidgets('Set description while recording', (WidgetTester tester) async {
-    final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
+    final List<CameraDescription> cameras =
+        await CameraPlatform.instance.availableCameras();
     if (cameras.length < 2) {
       return;
     }
 
     final CameraController controller = CameraController(
       cameras[0],
-      mediaSettings: MediaSettings(resolutionPreset: ResolutionPreset.low),
+      ResolutionPreset.low,
+      enableAudio: false,
     );
 
     await controller.initialize();
@@ -205,14 +244,16 @@ void main() {
   });
 
   testWidgets('Set description', (WidgetTester tester) async {
-    final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
+    final List<CameraDescription> cameras =
+        await CameraPlatform.instance.availableCameras();
     if (cameras.length < 2) {
       return;
     }
 
     final CameraController controller = CameraController(
       cameras[0],
-      mediaSettings: MediaSettings(resolutionPreset: ResolutionPreset.low),
+      ResolutionPreset.low,
+      enableAudio: false,
     );
 
     await controller.initialize();
@@ -222,10 +263,14 @@ void main() {
   });
 
   /// Start streaming with specifying the ImageFormatGroup.
-  Future<CameraImageData> startStreaming(List<CameraDescription> cameras, ImageFormatGroup? imageFormatGroup) async {
+  Future<CameraImageData> startStreaming(
+    List<CameraDescription> cameras,
+    ImageFormatGroup? imageFormatGroup,
+  ) async {
     final CameraController controller = CameraController(
-      cameras[0],
-      mediaSettings: MediaSettings(resolutionPreset: ResolutionPreset.low),
+      cameras.first,
+      ResolutionPreset.low,
+      enableAudio: false,
       imageFormatGroup: imageFormatGroup,
     );
 
@@ -245,49 +290,54 @@ void main() {
     return completer.future;
   }
 
-  testWidgets(
-    'image streaming with imageFormatGroup',
-    (WidgetTester tester) async {
-      final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
-      if (cameras.isEmpty) {
-        return;
-      }
+  testWidgets('image streaming with imageFormatGroup', (
+    WidgetTester tester,
+  ) async {
+    final List<CameraDescription> cameras =
+        await CameraPlatform.instance.availableCameras();
+    if (cameras.isEmpty) {
+      return;
+    }
 
-      CameraImageData image = await startStreaming(cameras, null);
-      expect(image, isNotNull);
-      expect(image.format.group, ImageFormatGroup.bgra8888);
-      expect(image.planes.length, 1);
+    CameraImageData image = await startStreaming(cameras, null);
+    expect(image, isNotNull);
+    expect(image.format.group, ImageFormatGroup.bgra8888);
+    expect(image.planes.length, 1);
 
-      image = await startStreaming(cameras, ImageFormatGroup.yuv420);
-      expect(image, isNotNull);
-      expect(image.format.group, ImageFormatGroup.yuv420);
-      expect(image.planes.length, 2);
+    image = await startStreaming(cameras, ImageFormatGroup.yuv420);
+    expect(image, isNotNull);
+    expect(image.format.group, ImageFormatGroup.yuv420);
+    expect(image.planes.length, 2);
 
-      image = await startStreaming(cameras, ImageFormatGroup.bgra8888);
-      expect(image, isNotNull);
-      expect(image.format.group, ImageFormatGroup.bgra8888);
-      expect(image.planes.length, 1);
-    },
-  );
+    image = await startStreaming(cameras, ImageFormatGroup.bgra8888);
+    expect(image, isNotNull);
+    expect(image.format.group, ImageFormatGroup.bgra8888);
+    expect(image.planes.length, 1);
+  });
 
   testWidgets('Recording with video streaming', (WidgetTester tester) async {
-    final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
+    final List<CameraDescription> cameras =
+        await CameraPlatform.instance.availableCameras();
     if (cameras.isEmpty) {
       return;
     }
 
     final CameraController controller = CameraController(
       cameras[0],
-      mediaSettings: MediaSettings(resolutionPreset: ResolutionPreset.low),
+      ResolutionPreset.low,
+      enableAudio: false,
     );
+
     await controller.initialize();
     await controller.prepareForVideoRecording();
     final Completer<CameraImageData> completer = Completer<CameraImageData>();
-    await controller.startVideoRecording(streamCallback: (CameraImageData image) {
-      if (!completer.isCompleted) {
-        completer.complete(image);
-      }
-    });
+    await controller.startVideoRecording(
+      streamCallback: (CameraImageData image) {
+        if (!completer.isCompleted) {
+          completer.complete(image);
+        }
+      },
+    );
     sleep(const Duration(milliseconds: 500));
     await controller.stopVideoRecording();
     await controller.dispose();
@@ -296,8 +346,11 @@ void main() {
   });
 
   // Test fileFormat is respected when taking a picture.
-  testWidgets('Capture specific image output formats', (WidgetTester tester) async {
-    final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
+  testWidgets('Capture specific image output formats', (
+    WidgetTester tester,
+  ) async {
+    final List<CameraDescription> cameras =
+        await CameraPlatform.instance.availableCameras();
     if (cameras.isEmpty) {
       return;
     }
@@ -305,11 +358,10 @@ void main() {
       for (final ImageFileFormat fileFormat in ImageFileFormat.values) {
         final CameraController controller = CameraController(
           cameraDescription,
-          mediaSettings: MediaSettings(resolutionPreset: ResolutionPreset.low),
+          ResolutionPreset.low,
         );
         await controller.initialize();
-        await CameraPlatform.instance.setImageFileFormat(controller.cameraId, fileFormat);
-
+        await controller.setImageFileFormat(fileFormat);
         final XFile file = await controller.takePicture();
         await controller.dispose();
         expect(file.path.endsWith(fileFormat.name), true);
@@ -319,14 +371,15 @@ void main() {
 
   group('Camera settings', () {
     testWidgets('Control FPS', (WidgetTester tester) async {
-      final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
+      final List<CameraDescription> cameras =
+          await CameraPlatform.instance.availableCameras();
       if (cameras.isEmpty) {
         return;
       }
 
       final List<int> lengths = <int>[];
       for (final int fps in <int>[10, 30]) {
-        final CameraController controller = CameraController(
+        final CameraController controller = CameraController.withSettings(
           cameras.first,
           mediaSettings: MediaSettings(
             resolutionPreset: ResolutionPreset.medium,
@@ -350,12 +403,17 @@ void main() {
       }
 
       for (int n = 0; n < lengths.length - 1; n++) {
-        expect(lengths[n], lessThan(lengths[n + 1]), reason: 'incrementing fps should increment file size');
+        expect(
+          lengths[n],
+          lessThan(lengths[n + 1]),
+          reason: 'incrementing fps should increment file size',
+        );
       }
     });
 
     testWidgets('Control video bitrate', (WidgetTester tester) async {
-      final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
+      final List<CameraDescription> cameras =
+          await CameraPlatform.instance.availableCameras();
       if (cameras.isEmpty) {
         return;
       }
@@ -363,7 +421,7 @@ void main() {
       const int kiloBits = 1024;
       final List<int> lengths = <int>[];
       for (final int videoBitrate in <int>[100 * kiloBits, 1000 * kiloBits]) {
-        final CameraController controller = CameraController(
+        final CameraController controller = CameraController.withSettings(
           cameras.first,
           mediaSettings: MediaSettings(
             resolutionPreset: ResolutionPreset.medium,
@@ -387,12 +445,17 @@ void main() {
       }
 
       for (int n = 0; n < lengths.length - 1; n++) {
-        expect(lengths[n], lessThan(lengths[n + 1]), reason: 'incrementing video bitrate should increment file size');
+        expect(
+          lengths[n],
+          lessThan(lengths[n + 1]),
+          reason: 'incrementing video bitrate should increment file size',
+        );
       }
     });
 
     testWidgets('Control audio bitrate', (WidgetTester tester) async {
-      final List<CameraDescription> cameras = await CameraPlatform.instance.availableCameras();
+      final List<CameraDescription> cameras =
+          await CameraPlatform.instance.availableCameras();
       if (cameras.isEmpty) {
         return;
       }
@@ -401,7 +464,7 @@ void main() {
 
       const int kiloBits = 1024;
       for (final int audioBitrate in <int>[32 * kiloBits, 64 * kiloBits]) {
-        final CameraController controller = CameraController(
+        final CameraController controller = CameraController.withSettings(
           cameras.first,
           mediaSettings: MediaSettings(
             resolutionPreset: ResolutionPreset.low,
@@ -411,7 +474,6 @@ void main() {
             enableAudio: true,
           ),
         );
-
         await controller.initialize();
         await controller.prepareForVideoRecording();
 
@@ -431,7 +493,11 @@ void main() {
       }
 
       for (int n = 0; n < lengths.length - 1; n++) {
-        expect(lengths[n], lessThan(lengths[n + 1]), reason: 'incrementing audio bitrate should increment file size');
+        expect(
+          lengths[n],
+          lessThan(lengths[n + 1]),
+          reason: 'incrementing audio bitrate should increment file size',
+        );
       }
     });
   });
