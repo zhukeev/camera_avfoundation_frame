@@ -6,3 +6,4 @@ sync_upstream.sh
 .upstream-sync-protect
 ios/camera_avfoundation_frame.podspec
 ios/camera_avfoundation_frame.podspec
+ios/camera_avfoundation_frame.podspec
