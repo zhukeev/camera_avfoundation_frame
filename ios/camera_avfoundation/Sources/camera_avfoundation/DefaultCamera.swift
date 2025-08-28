@@ -1376,69 +1376,9 @@ final class DefaultCamera: FLTCam, Camera {
 
   func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
     var pixelBuffer: CVPixelBuffer?
-
     pixelBufferSynchronizationQueue.sync {
-      guard let src = latestPixelBuffer else {
-        return
-      }
-
-      let width = CVPixelBufferGetWidth(src)
-      let height = CVPixelBufferGetHeight(src)
-      let pixelFormat = CVPixelBufferGetPixelFormatType(src)
-
-      let attrs: CFDictionary =
-        [
-          kCVPixelBufferIOSurfacePropertiesKey: [:]
-        ] as CFDictionary
-
-      var dst: CVPixelBuffer?
-      let status = CVPixelBufferCreate(
-        nil,
-        width,
-        height,
-        pixelFormat,
-        attrs,
-        &dst
-      )
-
-      guard status == kCVReturnSuccess, let dstBuffer = dst else {
-        return
-      }
-
-      CVPixelBufferLockBaseAddress(src, .readOnly)
-      CVPixelBufferLockBaseAddress(dstBuffer, [])
-
-      let isPlanar = CVPixelBufferIsPlanar(src)
-      let planeCount = isPlanar ? CVPixelBufferGetPlaneCount(src) : 1
-
-      for i in 0..<planeCount {
-        let srcPtr =
-          isPlanar
-          ? CVPixelBufferGetBaseAddressOfPlane(src, i)
-          : CVPixelBufferGetBaseAddress(src)
-
-        let dstPtr =
-          isPlanar
-          ? CVPixelBufferGetBaseAddressOfPlane(dstBuffer, i)
-          : CVPixelBufferGetBaseAddress(dstBuffer)
-
-        let height =
-          isPlanar
-          ? CVPixelBufferGetHeightOfPlane(src, i)
-          : CVPixelBufferGetHeight(src)
-
-        let bytesPerRow =
-          isPlanar
-          ? CVPixelBufferGetBytesPerRowOfPlane(src, i)
-          : CVPixelBufferGetBytesPerRow(src)
-
-        memcpy(dstPtr, srcPtr, height * bytesPerRow)
-      }
-
-      CVPixelBufferUnlockBaseAddress(dstBuffer, [])
-      CVPixelBufferUnlockBaseAddress(src, .readOnly)
-
-      pixelBuffer = dstBuffer
+      pixelBuffer = latestPixelBuffer
+      latestPixelBuffer = nil
     }
 
     if let buffer = pixelBuffer {
