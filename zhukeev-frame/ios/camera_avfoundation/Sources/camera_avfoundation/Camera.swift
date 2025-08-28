@@ -7,8 +7,8 @@ import CoreMotion
 import Flutter
 
 // Import Objectice-C part of the implementation when SwiftPM is used.
-#if canImport(camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame_objc)
-  import camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame_objc
+#if canImport(camera_avfoundation_objc)
+  import camera_avfoundation_objc
 #endif
 
 /// A class that manages camera's state and performs camera operations.

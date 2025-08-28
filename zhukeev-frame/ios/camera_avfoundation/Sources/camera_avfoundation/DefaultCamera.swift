@@ -5,8 +5,8 @@
 import CoreMotion
 
 // Import Objectice-C part of the implementation when SwiftPM is used.
-#if canImport(camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame_objc)
-  import camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame_objc
+#if canImport(camera_avfoundation_objc)
+  import camera_avfoundation_objc
 #endif
 
 final class DefaultCamera: FLTCam, Camera {
@@ -835,7 +835,7 @@ final class DefaultCamera: FLTCam, Camera {
     }
 
     let eventChannel = FlutterEventChannel(
-      name: "plugins.flutter.io/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/imageStream",
+      name: "plugins.flutter.io/camera_avfoundation/imageStream",
       binaryMessenger: messenger
     )
     let threadSafeEventChannel = FLTThreadSafeEventChannel(eventChannel: eventChannel)

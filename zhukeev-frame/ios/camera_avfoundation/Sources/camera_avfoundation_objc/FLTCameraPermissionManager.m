@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 @import AVFoundation;
-#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTCameraPermissionManager.h"
-#import "./include/camera_avfoundation_frame_frame_frame_frame_frame_frame_frame_frame/FLTPermissionServicing.h"
+#import "./include/camera_avfoundation/FLTCameraPermissionManager.h"
+#import "./include/camera_avfoundation/FLTPermissionServicing.h"
 
 @implementation FLTCameraPermissionManager
 
