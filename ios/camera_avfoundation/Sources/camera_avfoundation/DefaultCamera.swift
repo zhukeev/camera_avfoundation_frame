@@ -921,6 +921,9 @@ final class DefaultCamera: FLTCam, Camera {
       }
     }
 
+
+    handleSampleBufferStreaming(sampleBuffer)
+
     if isRecording && !isRecordingPaused {
       if videoWriter?.status == .failed, let error = videoWriter?.error {
         reportErrorMessage("\(error)")
