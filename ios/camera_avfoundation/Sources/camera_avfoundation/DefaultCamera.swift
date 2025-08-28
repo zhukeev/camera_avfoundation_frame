@@ -360,9 +360,6 @@ final class DefaultCamera: FLTCam, Camera {
     return true
   }
 
-
-
-
   func pauseVideoRecording() {
     isRecordingPaused = true
     videoIsDisconnected = true
@@ -881,6 +878,7 @@ final class DefaultCamera: FLTCam, Camera {
   ) {
     if output == captureVideoOutput.avOutput {
       if let newBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+
         pixelBufferSynchronizationQueue.sync {
           latestPixelBuffer = newBuffer
         }
@@ -1002,7 +1000,7 @@ final class DefaultCamera: FLTCam, Camera {
     }
   }
 
-   private func handleSampleBufferStreaming(_ sampleBuffer: CMSampleBuffer) {
+  private func handleSampleBufferStreaming(_ sampleBuffer: CMSampleBuffer) {
     guard isStreamingImages,
       let eventSink = imageStreamHandler?.eventSink,
       streamingPendingFramesCount < maxStreamingPendingFramesCount
