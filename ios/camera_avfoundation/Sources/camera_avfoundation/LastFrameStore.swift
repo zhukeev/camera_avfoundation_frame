@@ -158,31 +158,60 @@ final class LastFrameStore {
     /// Whether we have at least one cached frame.
     var hasFrame: Bool { return last != nil }
 
+    private func planeData(from pixelBuffer: CVPixelBuffer, plane: Int) -> (
+        data: Data, rowStride: Int, width: Int, height: Int
+    ) {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        let w = CVPixelBufferGetWidthOfPlane(pixelBuffer, plane)
+        let h = CVPixelBufferGetHeightOfPlane(pixelBuffer, plane)
+        let stride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, plane)
+        guard let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, plane) else {
+            return (Data(), stride, w, h)
+        }
+        let count = stride * h
+        let data = Data(bytes: base, count: count)
+        return (data, stride, w, h)
+    }
+
     /// Build a Dart-friendly map (`planes`) for the latest frame.
     /// - NV12 => 2 planes (Y and interleaved UV)
     /// - BGRA => 1 plane
     func buildPreviewFrameMap(copyBytes: Bool) -> [String: Any]? {
         guard let f = last else { return nil }
+        guard let pixelBuffer = f.pixelBuffer else { return nil }
 
-        let ySTD = FlutterStandardTypedData(bytes: copyBytes ? Data(f.y) : f.y)
-        let uvSTD = FlutterStandardTypedData(bytes: copyBytes ? Data(f.uv) : f.uv)
+        let y = planeData(from: pixelBuffer, plane: 0)
+        let uv = planeData(from: pixelBuffer, plane: 1)
+
+        let ySTD = FlutterStandardTypedData(bytes: copyBytes ? Data(y.data) : y.data)
+        let uvSTD = FlutterStandardTypedData(bytes: copyBytes ? Data(uv.data) : uv.data)
 
         let yPlane: [String: Any] = [
-            "bytes": ySTD, "bytesPerRow": f.width, "bytesPerPixel": 1,
-            "width": f.width, "height": f.height,
+            "bytes": ySTD,
+            "bytesPerRow": y.rowStride,
+            "bytesPerPixel": 1,
+            "width": y.width,
+            "height": y.height,
         ]
         let uvPlane: [String: Any] = [
-            "bytes": uvSTD, "bytesPerRow": f.width, "bytesPerPixel": 2,
-            "width": f.width, "height": f.height / 2,
+            "bytes": uvSTD,
+            "bytesPerRow": uv.rowStride,
+            "bytesPerPixel": 2,
+            "width": uv.width,
+            "height": uv.height,
         ]
 
         var out: [String: Any] = [
             "format": Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange),
-            "width": f.width, "height": f.height, "planes": [yPlane, uvPlane],
+            "width": f.width, 
+            "height": f.height, 
+            "planes": [yPlane, uvPlane],
         ]
 
         out["lensAperture"] = metaAperture ?? NSNull()
-        out["sensorExposureTime"] = metaExposureTimeNs ?? NSNull()  // ns
+        out["sensorExposureTime"] = metaExposureTimeNs ?? NSNull()
         out["sensorSensitivity"] = metaIso ?? NSNull()
 
         return out
