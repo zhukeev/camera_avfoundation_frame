@@ -2,7 +2,7 @@ name: camera_avfoundation_frame
 description: iOS implementation of the camera plugin.
 repository: https://github.com/zhukeev/camera_avfoundation_frame
 issue_tracker: https://github.com/zhukeev/camera_avfoundation_frame/issues
-version: 0.9.20+7
+version: 0.9.20+8
 
 environment:
   sdk: ^3.6.0

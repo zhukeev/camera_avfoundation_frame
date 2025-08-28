@@ -45,6 +45,8 @@ final class DefaultCamera: FLTCam, Camera {
   private var exposureMode = FCPPlatformExposureMode.auto
   private var focusMode = FCPPlatformFocusMode.auto
 
+  private let lastFrameStore = LastFrameStore()
+
   private static func flutterErrorFromNSError(_ error: NSError) -> FlutterError {
     return FlutterError(
       code: "Error \(error.code)",
@@ -348,10 +350,22 @@ final class DefaultCamera: FLTCam, Camera {
   ) {
     if output == captureVideoOutput.avOutput {
       if let newBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-
         pixelBufferSynchronizationQueue.sync {
           latestPixelBuffer = newBuffer
         }
+
+        // Forward the frame to NV12 LastFrameStore and update per-frame metadata.
+        let aperture = Double(captureDevice.lensAperture())
+        let exposureNs = Int(captureDevice.exposureDuration().seconds * 1_000_000_000)
+        let iso = Double(captureDevice.iso())
+
+        lastFrameStore.updateMetadata(
+          aperture: aperture,
+          exposureTimeNs: exposureNs,
+          iso: iso
+        )
+
+        _ = lastFrameStore.accept(sampleBuffer)
 
         onFrameAvailable?()
       }
@@ -368,64 +382,12 @@ final class DefaultCamera: FLTCam, Camera {
       {
         streamingPendingFramesCount += 1
 
-        let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)!
-        // Must lock base address before accessing the pixel data
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-
-        let imageWidth = CVPixelBufferGetWidth(pixelBuffer)
-        let imageHeight = CVPixelBufferGetHeight(pixelBuffer)
-
-        var planes: [[String: Any]] = []
-
-        let isPlanar = CVPixelBufferIsPlanar(pixelBuffer)
-        let planeCount = isPlanar ? CVPixelBufferGetPlaneCount(pixelBuffer) : 1
-
-        for i in 0..<planeCount {
-          let planeAddress: UnsafeMutableRawPointer?
-          let bytesPerRow: Int
-          let height: Int
-          let width: Int
-
-          if isPlanar {
-            planeAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, i)
-            bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, i)
-            height = CVPixelBufferGetHeightOfPlane(pixelBuffer, i)
-            width = CVPixelBufferGetWidthOfPlane(pixelBuffer, i)
-          } else {
-            planeAddress = CVPixelBufferGetBaseAddress(pixelBuffer)
-            bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-            height = CVPixelBufferGetHeight(pixelBuffer)
-            width = CVPixelBufferGetWidth(pixelBuffer)
+        if let map = lastFrameStore.buildPreviewFrameMap(copyBytes: true) {
+          DispatchQueue.main.async {
+            eventSink(map)
           }
-
-          let length = bytesPerRow * height
-          let bytes = Data(bytes: planeAddress!, count: length)
-
-          let planeBuffer: [String: Any] = [
-            "bytesPerRow": bytesPerRow,
-            "width": width,
-            "height": height,
-            "bytes": FlutterStandardTypedData(bytes: bytes),
-          ]
-          planes.append(planeBuffer)
-        }
-
-        // Lock the base address before accessing pixel data, and unlock it afterwards.
-        // Done accessing the `pixelBuffer` at this point.
-        CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
-
-        let imageBuffer: [String: Any] = [
-          "width": imageWidth,
-          "height": imageHeight,
-          "format": videoFormat,
-          "planes": planes,
-          "lensAperture": Double(captureDevice.lensAperture()),
-          "sensorExposureTime": Int(captureDevice.exposureDuration().seconds * 1_000_000_000),
-          "sensorSensitivity": Double(captureDevice.iso()),
-        ]
-
-        DispatchQueue.main.async {
-          eventSink(imageBuffer)
+        } else {
+          // Nothing to send; let Dart decrement pending when it receives (kept for parity).
         }
       }
     }
@@ -555,62 +517,11 @@ final class DefaultCamera: FLTCam, Camera {
   }
 
   func capturePreviewFrame(completion: @escaping ([String: Any]?, FlutterError?) -> Void) {
-
-    guard let pixelBuffer = copyPixelBuffer()?.takeRetainedValue() else {
+    if let map = lastFrameStore.buildPreviewFrameMap(copyBytes: true) {
+      completion(map, nil)
+    } else {
       completion(nil, FlutterError(code: "no_image", message: "No image available", details: nil))
-      return
     }
-
-    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-
-    let width = CVPixelBufferGetWidth(pixelBuffer)
-    let height = CVPixelBufferGetHeight(pixelBuffer)
-    let format = videoFormat  // FourCC Int32
-
-    var planes: [[String: Any]] = []
-
-    let isPlanar = CVPixelBufferIsPlanar(pixelBuffer)
-    let planeCount = isPlanar ? CVPixelBufferGetPlaneCount(pixelBuffer) : 1
-
-    for i in 0..<planeCount {
-      let baseAddress: UnsafeMutableRawPointer?
-      let bytesPerRow: Int
-      let planeWidth: Int
-      let planeHeight: Int
-
-      if isPlanar {
-        baseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, i)
-        bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, i)
-        planeWidth = CVPixelBufferGetWidthOfPlane(pixelBuffer, i)
-        planeHeight = CVPixelBufferGetHeightOfPlane(pixelBuffer, i)
-      } else {
-        baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer)
-        bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-        planeWidth = width
-        planeHeight = height
-      }
-
-      let length = bytesPerRow * planeHeight
-      let data = Data(bytes: baseAddress!, count: length)
-
-      planes.append([
-        "bytesPerRow": bytesPerRow,
-        "width": planeWidth,
-        "height": planeHeight,
-        "bytes": FlutterStandardTypedData(bytes: data),
-      ])
-    }
-
-    CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
-
-    let result: [String: Any] = [
-      "width": width,
-      "height": height,
-      "format": format,
-      "planes": planes,
-    ]
-
-    completion(result, nil)
   }
 
   func saveJpegAsJpeg(
@@ -659,6 +570,7 @@ final class DefaultCamera: FLTCam, Camera {
       )
     }
   }
+
   private func handleYuv420(
     imageData: [String: Any],
     outputPath: String,
@@ -744,9 +656,8 @@ final class DefaultCamera: FLTCam, Camera {
       return
     }
 
-    // ❗️ Используем BGRA: B = byte[0], G = byte[1], R = byte[2], A = byte[3]
     let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
-      .union(.byteOrder32Little)  // <- Ключевой момент
+      .union(.byteOrder32Little)
 
     guard
       let cgImage = CGImage(
@@ -825,65 +736,21 @@ final class DefaultCamera: FLTCam, Camera {
   }
 
   func capturePreviewFrameJpeg(
-  outputPath: String, rotationDegrees: Int32,
-  quality: Int32, completion: @escaping (String?, FlutterError?) -> Void
-) {
-  guard let pixelBuffer = copyPixelBuffer()?.takeRetainedValue() else {
-    completion(nil, FlutterError(code: "no_image", message: "No image available", details: nil))
-    return
+    outputPath: String, rotationDegrees: Int32,
+    quality: Int32, completion: @escaping (String?, FlutterError?) -> Void
+  ) {
+    do {
+      let path = try lastFrameStore.writeJpeg(
+        to: outputPath,
+        rotationDegrees: Int(rotationDegrees),
+        quality: Int(quality)
+      )
+      completion(path, nil)
+    } catch {
+      completion(
+        nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
+    }
   }
-
-  let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
-
-  let rotated: CIImage
-  switch rotationDegrees {
-  case 90:
-    rotated = ciImage.oriented(.right)
-  case 180:
-    rotated = ciImage.oriented(.down)
-  case 270:
-    rotated = ciImage.oriented(.left)
-  default:
-    rotated = ciImage
-  }
-
-  let context = CIContext()
-
-  guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else {
-    completion(
-      nil, FlutterError(code: "colorSpace", message: "Unable to create color space", details: nil)
-    )
-    return
-  }
-
-  guard
-    let cgImage = context.createCGImage(
-      rotated, from: rotated.extent, format: .RGBA8, colorSpace: colorSpace)
-  else {
-    completion(
-      nil, FlutterError(code: "convert_failed", message: "Unable to convert image", details: nil))
-    return
-  }
-
-  let uiImage = UIImage(cgImage: cgImage)
-
-  let compressionQuality = max(0.0, min(1.0, Double(quality) / 100.0))
-
-  guard let jpegData = uiImage.jpegData(compressionQuality: compressionQuality) else {
-    completion(
-      nil, FlutterError(code: "jpeg_encode", message: "Failed to encode image", details: nil))
-    return
-  }
-
-  do {
-    try jpegData.write(to: URL(fileURLWithPath: outputPath))
-    completion(outputPath, nil)
-  } catch {
-    completion(
-      nil, FlutterError(code: "write_failed", message: error.localizedDescription, details: nil))
-  }
-}
-
 
   func setUpCaptureSessionForVideoIfNeeded() {
     guard !videoCaptureSession.outputs.contains(where: { $0 is AVCaptureVideoDataOutput }) else {

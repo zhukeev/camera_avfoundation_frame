@@ -1,3 +1,7 @@
+## 0.9.20+8
+
+* feat: implement LastFrameStore for caching and managing the latest frame metadata
+
 ## 0.9.20+7
 
 * updated camera_platform_interface_frame to ^2.10.9
