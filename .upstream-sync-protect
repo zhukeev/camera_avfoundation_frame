@@ -1,0 +1,15 @@
+CHANGELOG.md
+README.md
+pubspec.yaml
+sync_upstream.sh
+.upstream-sync-exclude
+.upstream-sync-protect
+ios/camera_avfoundation_frame.podspec
+.git
+.github
+.gitignore
+.DS_Store
+.upstream_tmp
+.upstream_tmp/**
+.dart_tool/
+build/

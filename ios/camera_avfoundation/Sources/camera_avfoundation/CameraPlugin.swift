@@ -69,7 +69,8 @@ public final class CameraPlugin: NSObject, FlutterPlugin {
 
     super.init()
 
-    FLTDispatchQueueSetSpecific(captureSessionQueue, FLTCaptureSessionQueueSpecific)
+    captureSessionQueue.setSpecific(
+      key: captureSessionQueueSpecificKey, value: captureSessionQueueSpecificValue)
 
     UIDevice.current.beginGeneratingDeviceOrientationNotifications()
     NotificationCenter.default.addObserver(
@@ -300,7 +301,7 @@ extension CameraPlugin: FCPCameraApi {
       binaryMessenger: messenger,
       messageChannelSuffix: "\(cameraId)"
     )
-    camera.setUpCaptureSessionForVideoIfNeeded()
+
     camera.reportInitializationState()
     sendDeviceOrientation(UIDevice.current.orientation)
     camera.start()

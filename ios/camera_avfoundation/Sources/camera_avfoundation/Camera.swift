@@ -141,7 +141,5 @@ protocol Camera: FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate,
     from connection: AVCaptureConnection
   )
 
-  func setUpCaptureSessionForVideoIfNeeded()
-
   func close()
 }

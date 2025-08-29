@@ -1,67 +1,48 @@
+import Foundation
 import AVFoundation
 import CoreImage
-import Flutter
-import Foundation
 import ImageIO
-import VideoToolbox
 
-/// Stored frame payload: either NV12 (Y + interleaved UV) or BGRA (tightly packed).
-private enum StoredPayload {
-    case nv12(y: Data, uv: Data)  // Y: w*h, UV: w*(h/2) tightly packed
-    case bgra(bytes: Data, bytesPerRow: Int)  // tightly packed: bytesPerRow == width * 4
-}
-
-/// Lightweight snapshot of the latest frame.
-private struct StoredFrame {
-    let payload: StoredPayload
-    let width: Int
-    let height: Int
-    let tsNs: UInt64
-}
-
-/// - Caches the last frame (NV12 or BGRA).
-/// - Exposes a per-frame callback invoked on the same thread as `accept`.
-/// - Builds a Dart-friendly map (`planes`) compatible with your parser.
-/// - Saves JPEG with pixel rotation (no EXIF orientation).
+/// Caches the last camera frame (NV12 or 32BGRA) and exposes helpers
+/// to build a Flutter map and to write JPEGs.
 final class LastFrameStore {
-    typealias OnFrameListener = (_ frame: [String: Any]) -> Void
 
-    /// Throttling (~5 fps by default): 200ms.
-    private let defaultMinIntervalNs: UInt64 = 200_000_000
+    // MARK: - Cached frame
+
+    struct StoredFrame {
+        enum Payload {
+            case nv12(y: Data, uv: Data)              // tightly packed: yBPR = width, uvBPR = width
+            case bgra(bytes: Data, bytesPerRow: Int)  // tightly packed: bpr = width * 4
+        }
+        let payload: Payload
+        let width: Int
+        let height: Int
+        let tsNs: UInt64
+    }
+
+    // MARK: - Public hooks
+
+    /// Called after `accept(...)` if a frame was cached successfully.
+    /// Provides a Flutter-compatible map (format/width/height/planes/etc).
+    var onFrameListener: (([String: Any]) -> Void)?
+
+    /// Whether to copy `Data` objects when producing the Flutter map.
+    var copyBytesForCallback: Bool = true
+
+    // You can still update these, but we do NOT embed EXIF anymore.
+    var metaAperture: Double?
+    var metaExposureTimeNs: Int64?
+    var metaIso: Double?
+
+    // MARK: - Internals
+
+    private(set) var last: StoredFrame?
     private var lastAcceptTsNs: UInt64 = 0
 
-    // MARK: - Metadata (updated by the camera before accept)
-    private var metaAperture: Double?
-    private var metaExposureTimeNs: Int?
-    private var metaIso: Double?
+    /// Throttling between accepts (nanoseconds). 10ms by default.
+    var defaultMinIntervalNs: UInt64 = 10_000_000
 
-    /// Latest frame.
-    private var last: StoredFrame?
-
-    /// Optional listener.
-    private var onFrameListener: OnFrameListener?
-    private var copyBytesForCallback: Bool = true
-
-    // MARK: - Public API
-
-    /// Register a per-frame listener. Pass `nil` to clear.
-    func setOnFrameListener(_ listener: OnFrameListener?, copyBytesForCallback: Bool) {
-        self.onFrameListener = listener
-        self.copyBytesForCallback = copyBytesForCallback
-    }
-
-    /// Clear the listener.
-    func clearOnFrameListener() {
-        self.onFrameListener = nil
-    }
-
-    /// Update per-frame metadata so it can be embedded into the preview map.
-    func updateMetadata(aperture: Double?, exposureTimeNs: Int?, iso: Double?) {
-        // Store simple value types; called from the same queue as `accept`.
-        self.metaAperture = aperture
-        self.metaExposureTimeNs = exposureTimeNs
-        self.metaIso = iso
-    }
+    // MARK: - Accept a sample buffer and cache a tightly packed copy
 
     /// Accept a CMSampleBuffer (NV12 or 32BGRA).
     /// Copies into tightly packed buffers and updates the cache.
@@ -84,31 +65,31 @@ final class LastFrameStore {
 
         switch fmt {
         case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-            kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
+             kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
             // NV12: plane 0 (Y), plane 1 (interleaved UV)
             guard
                 let yBase = CVPixelBufferGetBaseAddressOfPlane(pixel, 0),
                 let uvBase = CVPixelBufferGetBaseAddressOfPlane(pixel, 1)
             else { return false }
 
-            let yBpr = CVPixelBufferGetBytesPerRowOfPlane(pixel, 0)
+            let yBpr  = CVPixelBufferGetBytesPerRowOfPlane(pixel, 0)
             let uvBpr = CVPixelBufferGetBytesPerRowOfPlane(pixel, 1)
-            let uvH = h / 2
+            let uvH   = h / 2
 
+            // Pack Y tightly: bytesPerRow = width
             var yData = Data(count: w * h)
             yData.withUnsafeMutableBytes { dst in
                 guard let dstPtr = dst.baseAddress else { return }
-                // Pack Y tightly: bytesPerRow = width
                 for row in 0..<h {
                     let srcRow = yBase.advanced(by: row * yBpr)
                     memcpy(dstPtr.advanced(by: row * w), srcRow, w)
                 }
             }
 
+            // Pack UV tightly: bytesPerRow = width (U,V,U,V,...)
             var uvData = Data(count: w * uvH)
             uvData.withUnsafeMutableBytes { dst in
                 guard let dstPtr = dst.baseAddress else { return }
-                // Pack UV tightly: bytesPerRow = width (U,V,U,V,...)
                 for row in 0..<uvH {
                     let srcRow = uvBase.advanced(by: row * uvBpr)
                     memcpy(dstPtr.advanced(by: row * w), srcRow, w)
@@ -116,12 +97,14 @@ final class LastFrameStore {
             }
 
             newFrame = StoredFrame(
-                payload: .nv12(y: yData, uv: uvData), width: w, height: h, tsNs: now)
+                payload: .nv12(y: yData, uv: uvData),
+                width: w, height: h, tsNs: now
+            )
 
         case kCVPixelFormatType_32BGRA:
-            // BGRA: pack tightly to width*4 per row (avoid platform-dependent stride).
+            // Pack BGRA tightly to width*4 per row
             guard let base = CVPixelBufferGetBaseAddress(pixel) else { return false }
-            let srcBpr = CVPixelBufferGetBytesPerRow(pixel)
+            let srcBpr   = CVPixelBufferGetBytesPerRow(pixel)
             let tightBpr = w * 4
 
             var bgra = Data(count: h * tightBpr)
@@ -135,7 +118,8 @@ final class LastFrameStore {
 
             newFrame = StoredFrame(
                 payload: .bgra(bytes: bgra, bytesPerRow: tightBpr),
-                width: w, height: h, tsNs: now)
+                width: w, height: h, tsNs: now
+            )
 
         default:
             // Unsupported format – ignore.
@@ -147,201 +131,233 @@ final class LastFrameStore {
         lastAcceptTsNs = now
 
         if let listener = onFrameListener,
-            let map = buildPreviewFrameMap(copyBytes: copyBytesForCallback)
-        {
-
+           let map = buildPreviewFrameMap(copyBytes: copyBytesForCallback) {
             listener(map)
         }
         return true
     }
 
-    /// Whether we have at least one cached frame.
-    var hasFrame: Bool { return last != nil }
+    // MARK: - Build Flutter map
 
-    /// Build a Dart-friendly map (`planes`) for the latest frame.
-    /// - NV12 => 2 planes (Y and interleaved UV)
-    /// - BGRA => 1 plane
+    /// Builds a Flutter-standard map for the last stored frame.
+    /// For NV12: two planes (Y and interleaved UV). For BGRA: one plane.
     func buildPreviewFrameMap(copyBytes: Bool) -> [String: Any]? {
         guard let f = last else { return nil }
 
-        let ySTD = FlutterStandardTypedData(bytes: copyBytes ? Data(f.y) : f.y)
-        let uvSTD = FlutterStandardTypedData(bytes: copyBytes ? Data(f.uv) : f.uv)
-
-        let yPlane: [String: Any] = [
-            "bytes": ySTD, "bytesPerRow": f.width, "bytesPerPixel": 1,
-            "width": f.width, "height": f.height,
-        ]
-        let uvPlane: [String: Any] = [
-            "bytes": uvSTD, "bytesPerRow": f.width, "bytesPerPixel": 2,
-            "width": f.width, "height": f.height / 2,
-        ]
-
-        var out: [String: Any] = [
-            "format": Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange),
-            "width": f.width, "height": f.height, "planes": [yPlane, uvPlane],
-        ]
-
-        out["lensAperture"] = metaAperture ?? NSNull()
-        out["sensorExposureTime"] = metaExposureTimeNs ?? NSNull()  // ns
-        out["sensorSensitivity"] = metaIso ?? NSNull()
-
-        return out
-    }
-
-    /// Save the latest frame as JPEG (no EXIF orientation). Rotation is applied in pixels.
-    @discardableResult
-    func writeJpeg(to outputPath: String, rotationDegrees: Int, quality: Int) throws -> String {
-        guard let f = last else {
-            throw NSError(
-                domain: "LastFrameStore", code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "No frame available"])
-        }
-
-        let clampedQ = max(1, min(100, quality))
-
-        let cgImage: CGImage
         switch f.payload {
         case let .nv12(y, uv):
-            // Rebuild a CVPixelBuffer (NV12) and render with CoreImage.
-            var pixelBuffer: CVPixelBuffer?
-            let attrs: [CFString: Any] = [
-                kCVPixelBufferCGImageCompatibilityKey: true,
-                kCVPixelBufferCGBitmapContextCompatibilityKey: true,
-                kCVPixelBufferIOSurfacePropertiesKey: [:],
+            let yBytes  = copyBytes ? Data(y)  : y
+            let uvBytes = copyBytes ? Data(uv) : uv
+
+            let ySTD  = FlutterStandardTypedData(bytes: yBytes)
+            let uvSTD = FlutterStandardTypedData(bytes: uvBytes)
+
+            let yPlane: [String: Any] = [
+                "bytes": ySTD, "bytesPerRow": f.width, "bytesPerPixel": 1,
+                "width": f.width, "height": f.height,
             ]
-            let status = CVPixelBufferCreate(
-                nil,
-                f.width,
-                f.height,
-                kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-                attrs as CFDictionary,
-                &pixelBuffer)
-            guard status == kCVReturnSuccess, let pb = pixelBuffer else {
-                throw NSError(
-                    domain: "LastFrameStore", code: -2,
-                    userInfo: [NSLocalizedDescriptionKey: "CVPixelBuffer create failed"])
-            }
+            let uvPlane: [String: Any] = [
+                "bytes": uvSTD, "bytesPerRow": f.width, "bytesPerPixel": 2,
+                "width": f.width, "height": f.height / 2,
+            ]
 
-            CVPixelBufferLockBaseAddress(pb, [])
-            defer { CVPixelBufferUnlockBaseAddress(pb, []) }
-
-            guard
-                let yDst = CVPixelBufferGetBaseAddressOfPlane(pb, 0),
-                let uvDst = CVPixelBufferGetBaseAddressOfPlane(pb, 1)
-            else {
-                throw NSError(
-                    domain: "LastFrameStore", code: -3,
-                    userInfo: [NSLocalizedDescriptionKey: "CVPixelBuffer plane addr failed"])
-            }
-
-            (y as NSData).getBytes(yDst, length: y.count)
-            (uv as NSData).getBytes(uvDst, length: uv.count)
-
-            let ci = CIImage(cvPixelBuffer: pb)
-            let rotated = orient(ci, by: rotationDegrees)
-            let context = CIContext()
-            guard
-                let out = context.createCGImage(
-                    rotated,
-                    from: rotated.extent,
-                    format: .RGBA8,
-                    colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
-            else {
-                throw NSError(
-                    domain: "LastFrameStore", code: -4,
-                    userInfo: [NSLocalizedDescriptionKey: "CI to CGImage failed"])
-            }
-            cgImage = out
+            return [
+                "format": Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange),
+                "width": f.width,
+                "height": f.height,
+                "planes": [yPlane, uvPlane],
+            ]
 
         case let .bgra(bytes, bytesPerRow):
-            // Create CGImage from tight BGRA buffer, then rotate via CI.
-            guard let provider = CGDataProvider(data: bytes as CFData) else {
-                throw NSError(
-                    domain: "LastFrameStore", code: -5,
-                    userInfo: [NSLocalizedDescriptionKey: "CGDataProvider failed"])
-            }
-            // BGRA: little-endian + premultipliedFirst (matches iOS memory layout).
-            let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
-                .union(.byteOrder32Little)
+            let data = copyBytes ? Data(bytes) : bytes
+            let std  = FlutterStandardTypedData(bytes: data)
 
-            guard
-                let base = CGImage(
-                    width: f.width,
-                    height: f.height,
-                    bitsPerComponent: 8,
-                    bitsPerPixel: 32,
-                    bytesPerRow: bytesPerRow,
-                    space: CGColorSpaceCreateDeviceRGB(),
-                    bitmapInfo: bitmapInfo,
-                    provider: provider,
-                    decode: nil,
-                    shouldInterpolate: true,
-                    intent: .defaultIntent)
-            else {
-                throw NSError(
-                    domain: "LastFrameStore", code: -6,
-                    userInfo: [NSLocalizedDescriptionKey: "CGImage(BGRA) create failed"])
-            }
-
-            let ci = CIImage(cgImage: base)
-            let rotated = orient(ci, by: rotationDegrees)
-            let context = CIContext()
-            guard
-                let out = context.createCGImage(
-                    rotated,
-                    from: rotated.extent,
-                    format: .RGBA8,
-                    colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
-            else {
-                throw NSError(
-                    domain: "LastFrameStore", code: -7,
-                    userInfo: [NSLocalizedDescriptionKey: "CI to CGImage failed"])
-            }
-            cgImage = out
-        }
-
-        try writeCGImageAsJPEG(cgImage, to: outputPath, quality: clampedQ)
-        return outputPath
-    }
-
-    // MARK: - Helpers
-
-    /// Map degrees to CIImage orientation.
-    private func orient(_ ci: CIImage, by deg: Int) -> CIImage {
-        let d = (deg % 360 + 360) % 360
-        switch d {
-        case 90: return ci.oriented(.right)
-        case 180: return ci.oriented(.down)
-        case 270: return ci.oriented(.left)
-        default: return ci
+            let plane: [String: Any] = [
+                "bytes": std, "bytesPerRow": bytesPerRow, "bytesPerPixel": 4,
+                "width": f.width, "height": f.height,
+            ]
+            return [
+                "format": Int(kCVPixelFormatType_32BGRA),
+                "width": f.width, "height": f.height,
+                "planes": [plane],
+            ]
         }
     }
 
-    private func writeCGImageAsJPEG(_ img: CGImage, to path: String, quality: Int) throws {
-        let destType: CFString = "public.jpeg" as CFString
+    // MARK: - Metadata (kept for compatibility; not embedded to JPEG)
 
+    func updateMetadata(aperture: Double?, exposureTimeNs: Int64?, iso: Double?) {
+        self.metaAperture = aperture
+        self.metaExposureTimeNs = exposureTimeNs
+        self.metaIso = iso
+    }
+    func updateMetadata(aperture: Double?, exposureTimeSeconds: Double?, iso: Double?) {
+        let ns = exposureTimeSeconds.map { Int64($0 * 1_000_000_000.0) }
+        updateMetadata(aperture: aperture, exposureTimeNs: ns, iso: iso)
+    }
+    func updateMetadata(aperture: Double?, exposureDuration: CMTime?, iso: Double?) {
+        let ns: Int64?
+        if let t = exposureDuration, t.isNumeric && t.timescale != 0 {
+            ns = Int64((Double(t.value) / Double(t.timescale)) * 1_000_000_000.0)
+        } else { ns = nil }
+        updateMetadata(aperture: aperture, exposureTimeNs: ns, iso: iso)
+    }
+
+    // MARK: - JPEG writing (path + rotation, no EXIF)
+
+    enum JPEGError: Error {
+        case noFrame
+        case cannotCreateDestination
+        case finalizeFailed
+    }
+
+    /// Writes the last frame to a JPEG file by path, with optional rotation.
+    /// - Parameters:
+    ///   - path: destination file path
+    ///   - rotationDegrees: 0 / 90 / 180 / 270 (clockwise)
+    ///   - quality: 0...100
+    /// - Returns: the same `path` on success
+    @discardableResult
+    func writeJpeg(to path: String, rotationDegrees: Int = 0, quality: Int = 92) throws -> String {
+        guard let f = last, let cg = makeCGImage(from: f) else { throw JPEGError.noFrame }
+
+        // Clamp quality to 0...100 and convert to 0...1
+        let qq = max(0, min(100, quality))
+        let qf = CGFloat(qq) / 100.0
+
+        // Make sure directory exists
         let url = URL(fileURLWithPath: path)
-        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, destType, 1, nil) else {
-            throw NSError(
-                domain: "LastFrameStore",
-                code: -8,
-                userInfo: [NSLocalizedDescriptionKey: "CGImageDestination create failed"]
-            )
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+
+        // Apply rotation via CoreImage (no EXIF tags, real pixel rotation)
+        let rotatedCG = try rotate(cgImage: cg, degrees: rotationDegrees)
+
+        // Use "public.jpeg" UTI directly
+        let jpegUTI: CFString = "public.jpeg" as CFString
+        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, jpegUTI, 1, nil) else {
+            throw JPEGError.cannotCreateDestination
         }
 
-        let q = max(1, min(100, quality))
-        let opts: [CFString: Any] = [
-            kCGImageDestinationLossyCompressionQuality: CGFloat(q) / 100.0
+        let options: [CFString: Any] = [
+            kCGImageDestinationLossyCompressionQuality: qf
         ]
-
-        CGImageDestinationAddImage(dest, img, opts as CFDictionary)
+        CGImageDestinationAddImage(dest, rotatedCG, options as CFDictionary)
         if !CGImageDestinationFinalize(dest) {
-            throw NSError(
-                domain: "LastFrameStore",
-                code: -9,
-                userInfo: [NSLocalizedDescriptionKey: "JPEG finalize failed"]
-            )
+            throw JPEGError.finalizeFailed
         }
+        return path
     }
 
+    /// Legacy convenience wrapper (non-throwing). Returns true on success.
+    @discardableResult
+    func writeJpeg(path: String, quality: CGFloat = 0.92) -> Bool {
+        do {
+            _ = try writeJpeg(to: path,
+                              rotationDegrees: 0,
+                              quality: Int(round(quality * 100)))
+            return true
+        } catch {
+            return false
+        }
+    }
+}
+
+// MARK: - Rotation
+
+private func rotate(cgImage: CGImage, degrees: Int) throws -> CGImage {
+    let norm = ((degrees % 360) + 360) % 360
+    if norm == 0 {
+        return cgImage
+    }
+
+    // Use CIImage to rotate by 90/180/270 without EXIF.
+    let ci = CIImage(cgImage: cgImage)
+    let oriented: CIImage
+    switch norm {
+    case 90:  oriented = ci.oriented(.right)  // 90° CW
+    case 180: oriented = ci.oriented(.down)   // 180°
+    case 270: oriented = ci.oriented(.left)   // 270° CW (i.e., 90° CCW)
+    default:
+        // Fallback for non-right-angle values: rotate arbitrary angle.
+        oriented = ci.transformed(by: CGAffineTransform(rotationAngle: CGFloat(norm) * .pi / 180))
+    }
+    let ctx = CIContext(options: nil)
+    guard let out = ctx.createCGImage(oriented, from: oriented.extent) else {
+        throw LastFrameStore.JPEGError.finalizeFailed
+    }
+    return out
+}
+
+// MARK: - CGImage construction
+
+private func makeCGImage(from f: LastFrameStore.StoredFrame) -> CGImage? {
+    switch f.payload {
+    case let .bgra(bytes, bytesPerRow):
+        // Direct BGRA -> CGImage
+        guard let provider = CGDataProvider(data: bytes as CFData) else { return nil }
+        let cs = CGColorSpaceCreateDeviceRGB()
+
+        // bitmapInfo = byteOrder32Little + premultipliedFirst alpha
+        let alpha = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
+        let bitmapInfo = CGBitmapInfo.byteOrder32Little.union(alpha)
+
+        return CGImage(
+            width: f.width,
+            height: f.height,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: bytesPerRow,
+            space: cs,
+            bitmapInfo: bitmapInfo,
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: true,
+            intent: .defaultIntent
+        )
+
+    case let .nv12(y, uv):
+        // Rebuild a temporary NV12 CVPixelBuffer from tightly-packed planes,
+        // then render to CGImage via CoreImage.
+        var pb: CVPixelBuffer?
+        let attrs: [CFString: Any] = [ kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary ]
+        guard CVPixelBufferCreate(
+            nil, f.width, f.height,
+            kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+            attrs as CFDictionary, &pb
+        ) == kCVReturnSuccess, let pixel = pb else { return nil }
+
+        CVPixelBufferLockBaseAddress(pixel, [])
+        defer { CVPixelBufferUnlockBaseAddress(pixel, []) }
+
+        guard
+            let yBase  = CVPixelBufferGetBaseAddressOfPlane(pixel, 0),
+            let uvBase = CVPixelBufferGetBaseAddressOfPlane(pixel, 1)
+        else { return nil }
+
+        let yDstBpr  = CVPixelBufferGetBytesPerRowOfPlane(pixel, 0)
+        let uvDstBpr = CVPixelBufferGetBytesPerRowOfPlane(pixel, 1)
+        let uvH = f.height / 2
+
+        y.withUnsafeBytes { src in
+            guard let srcPtr = src.baseAddress else { return }
+            for row in 0..<f.height {
+                memcpy(yBase.advanced(by: row * yDstBpr),
+                       srcPtr.advanced(by: row * f.width),
+                       f.width)
+            }
+        }
+        uv.withUnsafeBytes { src in
+            guard let srcPtr = src.baseAddress else { return }
+            for row in 0..<uvH {
+                memcpy(uvBase.advanced(by: row * uvDstBpr),
+                       srcPtr.advanced(by: row * f.width),
+                       f.width)
+            }
+        }
+
+        let ci = CIImage(cvPixelBuffer: pixel)
+        let ctx = CIContext(options: nil)
+        return ctx.createCGImage(ci, from: ci.extent)
+    }
 }
