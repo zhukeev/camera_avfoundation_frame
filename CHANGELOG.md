@@ -1,3 +1,11 @@
+## 0.9.20+9
+
+* feat: sync up `camera_avfoundation` to **^0.9.21+1**
+* feat(ios): implement `LastFrameStore` for caching and latest frame metadata
+* feat(ios): **`writeJpeg(to: rotationDegrees: quality:)`** — path-only, rotates pixels (no EXIF)
+* fix(ios): `updateMetadata` exposure type mismatch (`Int` → `Int64`)
+* chore: extend `.upstream-sync-exclude` / `.upstream-sync-protect` for generated files & local sources
+
 ## 0.9.20+8
 
 * feat: implement LastFrameStore for caching and managing the latest frame metadata
