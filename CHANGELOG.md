@@ -1,5 +1,10 @@
 ## 0.9.20+10
 
+* updated camera_avfoundation to ^0.9.21+2
+* updated readme
+
+## 0.9.20+10
+
 * updated camera_platform_interface_frame to ^2.10.10
 
 ## 0.9.20+9
