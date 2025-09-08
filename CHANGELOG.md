@@ -1,4 +1,4 @@
-## 0.9.20+10
+## 0.9.20+11
 
 * updated camera_avfoundation to ^0.9.21+2
 * updated readme
