@@ -182,20 +182,6 @@ abstract class CameraApi {
   @async
   String takePicture();
 
-  @async
-  @ObjCSelector('capturePreviewFrameJpegOutputPath:rotationDegrees:quality:')
-  String capturePreviewFrameJpeg(String outputPath, int rotation, int quality);
-
-  @async
-  @ObjCSelector(
-      'saveJpegAsJpegWithImageData:outputPath:rotationDegrees:quality:')
-  String saveJpegAsJpeg(Map<String, Object?> imageData, String outputPath,
-      int rotation, int quality);
-
-  @async
-  @ObjCSelector('capturePreviewFrameWithCompletion')
-  Map<String, Object?> capturePreviewFrame();
-
   /// Does any preprocessing necessary before beginning to record video.
   @async
   void prepareForVideoRecording();

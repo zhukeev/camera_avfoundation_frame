@@ -5,7 +5,7 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:camera_platform_interface_frame/camera_platform_interface_frame.dart';
+import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -195,44 +195,6 @@ class AVFoundationCamera extends CameraPlatform {
   Future<XFile> takePicture(int cameraId) async {
     final String path = await _hostApi.takePicture();
     return XFile(path);
-  }
-
-  @override
-  Future<XFile> capturePreviewFrameJpeg(
-    String outputPath, [
-    int rotation = 0,
-    int quality = 100,
-  ]) async {
-    final String path = await _hostApi.capturePreviewFrameJpeg(
-      outputPath,
-      rotation,
-      quality,
-    );
-    return XFile(path);
-  }
-
-  @override
-  Future<XFile> saveAsJpeg(
-    CameraImageData imageData,
-    String outputPath,
-    int rotation,
-    int quality,
-  ) async {
-    final dynamic platformImageData = cameraImageToPlatformData(imageData);
-    final String path = await _hostApi.saveJpegAsJpeg(
-      platformImageData,
-      outputPath,
-      rotation,
-      quality,
-    );
-    return XFile(path);
-  }
-
-  @override
-  Future<CameraImageData> capturePreviewFrame() async {
-    final dynamic imageData = await _hostApi.capturePreviewFrame();
-
-    return cameraImageFromPlatformData(imageData as Map<dynamic, dynamic>);
   }
 
   @override

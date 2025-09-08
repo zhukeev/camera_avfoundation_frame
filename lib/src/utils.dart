@@ -2,23 +2,26 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:camera_platform_interface_frame/camera_platform_interface_frame.dart';
+import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/services.dart';
 
 import 'messages.g.dart';
 
 /// Creates a [CameraDescription] from a Pigeon [PlatformCameraDescription].
 CameraDescription cameraDescriptionFromPlatform(
-    PlatformCameraDescription camera) {
+  PlatformCameraDescription camera,
+) {
   return CameraDescription(
-      name: camera.name,
-      lensDirection: cameraLensDirectionFromPlatform(camera.lensDirection),
-      sensorOrientation: 90);
+    name: camera.name,
+    lensDirection: cameraLensDirectionFromPlatform(camera.lensDirection),
+    sensorOrientation: 90,
+  );
 }
 
 /// Converts a Pigeon [PlatformCameraLensDirection] to a [CameraLensDirection].
 CameraLensDirection cameraLensDirectionFromPlatform(
-    PlatformCameraLensDirection direction) {
+  PlatformCameraLensDirection direction,
+) {
   return switch (direction) {
     PlatformCameraLensDirection.front => CameraLensDirection.front,
     PlatformCameraLensDirection.back => CameraLensDirection.back,
@@ -28,7 +31,8 @@ CameraLensDirection cameraLensDirectionFromPlatform(
 
 /// Convents the given device orientation to Pigeon.
 PlatformDeviceOrientation serializeDeviceOrientation(
-    DeviceOrientation orientation) {
+  DeviceOrientation orientation,
+) {
   switch (orientation) {
     case DeviceOrientation.portraitUp:
       return PlatformDeviceOrientation.portraitUp;
@@ -50,7 +54,8 @@ PlatformDeviceOrientation serializeDeviceOrientation(
 
 /// Converts a Pigeon [PlatformDeviceOrientation] to a [DeviceOrientation].
 DeviceOrientation deviceOrientationFromPlatform(
-    PlatformDeviceOrientation orientation) {
+  PlatformDeviceOrientation orientation,
+) {
   return switch (orientation) {
     PlatformDeviceOrientation.portraitUp => DeviceOrientation.portraitUp,
     PlatformDeviceOrientation.portraitDown => DeviceOrientation.portraitDown,
