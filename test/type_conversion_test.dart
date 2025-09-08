@@ -10,7 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('CameraImageData can be created', () {
-    final CameraImageData cameraImage = cameraImageFromPlatformData(<dynamic, dynamic>{
+    final CameraImageData cameraImage =
+        cameraImageFromPlatformData(<dynamic, dynamic>{
       'format': 1,
       'height': 1,
       'width': 4,
@@ -34,7 +35,8 @@ void main() {
   });
 
   test('CameraImageData has ImageFormatGroup.yuv420', () {
-    final CameraImageData cameraImage = cameraImageFromPlatformData(<dynamic, dynamic>{
+    final CameraImageData cameraImage =
+        cameraImageFromPlatformData(<dynamic, dynamic>{
       'format': 875704438,
       'height': 1,
       'width': 4,

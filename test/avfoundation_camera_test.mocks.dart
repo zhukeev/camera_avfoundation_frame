@@ -40,14 +40,17 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
       ) as String);
 
   @override
-  _i4.Future<List<_i2.PlatformCameraDescription>> getAvailableCameras() => (super.noSuchMethod(
+  _i4.Future<List<_i2.PlatformCameraDescription>> getAvailableCameras() =>
+      (super.noSuchMethod(
         Invocation.method(
           #getAvailableCameras,
           [],
         ),
-        returnValue: _i4.Future<List<_i2.PlatformCameraDescription>>.value(<_i2.PlatformCameraDescription>[]),
+        returnValue: _i4.Future<List<_i2.PlatformCameraDescription>>.value(
+            <_i2.PlatformCameraDescription>[]),
         returnValueForMissingStub:
-            _i4.Future<List<_i2.PlatformCameraDescription>>.value(<_i2.PlatformCameraDescription>[]),
+            _i4.Future<List<_i2.PlatformCameraDescription>>.value(
+                <_i2.PlatformCameraDescription>[]),
       ) as _i4.Future<List<_i2.PlatformCameraDescription>>);
 
   @override
@@ -125,7 +128,9 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<void> lockCaptureOrientation(_i2.PlatformDeviceOrientation? orientation) => (super.noSuchMethod(
+  _i4.Future<void> lockCaptureOrientation(
+          _i2.PlatformDeviceOrientation? orientation) =>
+      (super.noSuchMethod(
         Invocation.method(
           #lockCaptureOrientation,
           [orientation],
@@ -157,7 +162,8 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
             [],
           ),
         )),
-        returnValueForMissingStub: _i4.Future<String>.value(_i3.dummyValue<String>(
+        returnValueForMissingStub:
+            _i4.Future<String>.value(_i3.dummyValue<String>(
           this,
           Invocation.method(
             #takePicture,
@@ -177,7 +183,8 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<void> startVideoRecording(bool? enableStream) => (super.noSuchMethod(
+  _i4.Future<void> startVideoRecording(bool? enableStream) =>
+      (super.noSuchMethod(
         Invocation.method(
           #startVideoRecording,
           [enableStream],
@@ -199,7 +206,8 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
             [],
           ),
         )),
-        returnValueForMissingStub: _i4.Future<String>.value(_i3.dummyValue<String>(
+        returnValueForMissingStub:
+            _i4.Future<String>.value(_i3.dummyValue<String>(
           this,
           Invocation.method(
             #stopVideoRecording,
@@ -229,7 +237,8 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<void> setFlashMode(_i2.PlatformFlashMode? mode) => (super.noSuchMethod(
+  _i4.Future<void> setFlashMode(_i2.PlatformFlashMode? mode) =>
+      (super.noSuchMethod(
         Invocation.method(
           #setFlashMode,
           [mode],
@@ -239,7 +248,8 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<void> setExposureMode(_i2.PlatformExposureMode? mode) => (super.noSuchMethod(
+  _i4.Future<void> setExposureMode(_i2.PlatformExposureMode? mode) =>
+      (super.noSuchMethod(
         Invocation.method(
           #setExposureMode,
           [mode],
@@ -249,7 +259,8 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<void> setExposurePoint(_i2.PlatformPoint? point) => (super.noSuchMethod(
+  _i4.Future<void> setExposurePoint(_i2.PlatformPoint? point) =>
+      (super.noSuchMethod(
         Invocation.method(
           #setExposurePoint,
           [point],
@@ -289,7 +300,8 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<void> setFocusMode(_i2.PlatformFocusMode? mode) => (super.noSuchMethod(
+  _i4.Future<void> setFocusMode(_i2.PlatformFocusMode? mode) =>
+      (super.noSuchMethod(
         Invocation.method(
           #setFocusMode,
           [mode],
@@ -299,7 +311,8 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<void> setFocusPoint(_i2.PlatformPoint? point) => (super.noSuchMethod(
+  _i4.Future<void> setFocusPoint(_i2.PlatformPoint? point) =>
+      (super.noSuchMethod(
         Invocation.method(
           #setFocusPoint,
           [point],
@@ -359,7 +372,8 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<void> updateDescriptionWhileRecording(String? cameraName) => (super.noSuchMethod(
+  _i4.Future<void> updateDescriptionWhileRecording(String? cameraName) =>
+      (super.noSuchMethod(
         Invocation.method(
           #updateDescriptionWhileRecording,
           [cameraName],
@@ -369,7 +383,8 @@ class MockCameraApi extends _i1.Mock implements _i2.CameraApi {
       ) as _i4.Future<void>);
 
   @override
-  _i4.Future<void> setImageFileFormat(_i2.PlatformImageFileFormat? format) => (super.noSuchMethod(
+  _i4.Future<void> setImageFileFormat(_i2.PlatformImageFileFormat? format) =>
+      (super.noSuchMethod(
         Invocation.method(
           #setImageFileFormat,
           [format],
