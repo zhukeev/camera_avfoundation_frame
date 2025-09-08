@@ -6,7 +6,7 @@ import AVFoundation
 import CoreMotion
 import Flutter
 
-// Import Objective-C part of the implementation when SwiftPM is used.
+// Import Objectice-C part of the implementation when SwiftPM is used.
 #if canImport(camera_avfoundation_objc)
   import camera_avfoundation_objc
 #endif
@@ -62,6 +62,20 @@ protocol Camera: FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate,
   func stopVideoRecording(completion: @escaping (_ path: String?, _ error: FlutterError?) -> Void)
 
   func captureToFile(completion: @escaping (_ path: String?, _ error: FlutterError?) -> Void)
+
+  func capturePreviewFrameJpeg(
+    outputPath: String, rotationDegrees: Int32,
+    quality: Int32, completion: @escaping (String?, FlutterError?) -> Void)
+
+  func saveJpegAsJpeg(
+    withImageData imageData: [String: Any],
+    outputPath: String,
+    rotationDegrees: Int32,
+    quality: Int32,
+    completion: @escaping (String?, FlutterError?) -> Void
+  )
+
+  func capturePreviewFrame(completion: @escaping ([String: Any]?, FlutterError?) -> Void)
 
   func lockCaptureOrientation(_ orientation: FCPPlatformDeviceOrientation)
   func unlockCaptureOrientation()
