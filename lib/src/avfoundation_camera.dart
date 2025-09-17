@@ -58,13 +58,13 @@ class AVFoundationCamera extends CameraPlatform {
   StreamSubscription<dynamic>? _platformImageStreamSubscription;
 
   // The stream to receive frames from the native code.
-  StreamSubscription<dynamic>? _platformFramesStreamSubscription;
+  StreamSubscription<dynamic>? _onStreamedFramesSubscription;
 
   // The stream for vending frames to platform interface clients.
   StreamController<CameraImageData>? _frameStreamController;
 
   // [startListenFrames] stream
-  StreamController<CameraImageData>? _framesStreamController;
+  StreamController<CameraImageData>? _onStreamedFramesController;
 
   Stream<CameraEvent> _cameraEvents(int cameraId) =>
       cameraEventStreamController.stream
@@ -246,10 +246,10 @@ class AVFoundationCamera extends CameraPlatform {
 
   @override
   Stream<CameraImageData> onStreamedFramesAvailable() {
-    _framesStreamController = _createFramesStreamController(
+    _onStreamedFramesController = _createFramesStreamController(
       onListen: _onFramesStreamListen,
     );
-    return _framesStreamController!.stream;
+    return _onStreamedFramesController!.stream;
   }
 
   @override
@@ -369,14 +369,14 @@ class AVFoundationCamera extends CameraPlatform {
     const EventChannel cameraEventChannel = EventChannel(
       'plugins.flutter.io/camera_avfoundation/framesStream',
     );
-    _platformFramesStreamSubscription =
+    _onStreamedFramesSubscription =
         cameraEventChannel.receiveBroadcastStream().listen((dynamic imageData) {
       try {
         _hostApi.receivedFrameStreamData();
       } on PlatformException catch (e) {
         throw CameraException(e.code, e.message);
       }
-      _framesStreamController!.add(
+      _onStreamedFramesController!.add(
         cameraImageFromPlatformData(imageData as Map<dynamic, dynamic>),
       );
     });
@@ -391,10 +391,10 @@ class AVFoundationCamera extends CameraPlatform {
 
   FutureOr<void> _onFramesStreamCancel() async {
     await _hostApi.stopFrameStream();
-    await _platformFramesStreamSubscription?.cancel();
-    _platformFramesStreamSubscription = null;
-    _framesStreamController?.close();
-    _framesStreamController = null;
+    await _onStreamedFramesSubscription?.cancel();
+    _onStreamedFramesSubscription = null;
+    _onStreamedFramesController?.close();
+    _onStreamedFramesController = null;
   }
 
   void _onFramesStreamPauseResume() {
