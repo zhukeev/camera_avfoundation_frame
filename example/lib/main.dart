@@ -1052,6 +1052,10 @@ class _CameraExampleHomeState extends State<CameraExampleHome>
         lastTime = now;
       });
 
+      Future.delayed(const Duration(seconds: 5), () {
+        cameraController.stopFrameStream();
+      });
+
       print('caputureJpeg took ${sw1p.elapsedMilliseconds} ms ${file.path}');
       sw1p.reset();
 
