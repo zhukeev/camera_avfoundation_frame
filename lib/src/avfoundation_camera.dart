@@ -386,7 +386,7 @@ class AVFoundationCamera extends CameraPlatform {
     await _hostApi.stopImageStream();
     await _platformImageStreamSubscription?.cancel();
     _platformImageStreamSubscription = null;
-    _framesStreamController = null;
+    _frameStreamController = null;
   }
 
   FutureOr<void> _onFramesStreamCancel() async {
