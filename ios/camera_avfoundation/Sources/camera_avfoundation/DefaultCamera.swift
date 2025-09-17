@@ -57,6 +57,9 @@ final class DefaultCamera: FLTCam, Camera {
   private var exposureMode = FCPPlatformExposureMode.auto
   private var focusMode = FCPPlatformFocusMode.auto
 
+  private(set) var isStreamingFrames: Bool = false
+  private var framesStreamHandler: FLTImageStreamHandler?
+
   private let lastFrameStore = LastFrameStore()
 
   private static func flutterErrorFromNSError(_ error: NSError) -> FlutterError {
@@ -1356,6 +1359,80 @@ final class DefaultCamera: FLTCam, Camera {
     if videoCaptureSession.canAddOutput(videoDataOutput) {
       videoCaptureSession.addOutput(videoDataOutput)
     }
+
+    lastFrameStore.setFrameFps(mediaSettings.frameFps?.intValue)
+  }
+
+  func startFrameStream(
+    with messenger: FlutterBinaryMessenger,
+    completion: @escaping (FlutterError?) -> Void
+  ) {
+    startFrameStream(
+      with: messenger,
+      framesStreamHandler: FLTImageStreamHandler(captureSessionQueue: captureSessionQueue),
+      completion: completion
+    )
+  }
+
+  func startFrameStream(
+    with messenger: FlutterBinaryMessenger,
+    framesStreamHandler: FLTImageStreamHandler,
+    completion: @escaping (FlutterError?) -> Void
+  ) {
+    if isStreamingFrames {
+      reportErrorMessage("Frames from camera are already streaming!")
+      completion(nil)
+      return
+    }
+
+    let eventChannel = FlutterEventChannel(
+      name: "plugins.flutter.io/camera_avfoundation/framesStream",
+      binaryMessenger: messenger
+    )
+    let threadSafeEventChannel = FLTThreadSafeEventChannel(eventChannel: eventChannel)
+
+    self.framesStreamHandler = framesStreamHandler
+
+    threadSafeEventChannel.setStreamHandler(framesStreamHandler) { [weak self] in
+      guard let self else { completion(nil); return }
+
+      self.captureSessionQueue.async { [weak self] in
+        guard let self else { completion(nil); return }
+
+        self.isStreamingFrames = true
+        self.framesStreamingPendingFramesCount = 0
+        self.lastFrameStore.setFrameFps(self.mediaSettings.frameFps?.intValue)
+
+        self.lastFrameStore.setOnFrameListener(copyBytes: true) { [weak self] map in
+          guard let self,
+                self.isStreamingFrames,
+                !self.isPreviewPaused,
+                self.framesStreamingPendingFramesCount < self.maxStreamingPendingFramesCount,
+                let sink = self.framesStreamHandler?.eventSink
+          else { return }
+
+          self.framesStreamingPendingFramesCount += 1
+          DispatchQueue.main.async { sink(map) }
+        }
+
+        completion(nil)
+      }
+    }
+  }
+
+  func stopFrameStream() {
+    if isStreamingFrames {
+      isStreamingFrames = false
+      framesStreamHandler = nil
+      framesStreamingPendingFramesCount = 0
+      lastFrameStore.clearOnFrameListener()
+    } else {
+      reportErrorMessage("Frames from camera are not streaming!")
+    }
+  }
+
+  func receivedFrameStreamData() {
+    framesStreamingPendingFramesCount = max(0, framesStreamingPendingFramesCount - 1)
   }
 
   func close() {

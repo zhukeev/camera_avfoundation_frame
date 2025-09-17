@@ -36,6 +36,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, nullable) FLTImageStreamHandler *imageStreamHandler;
 /// Number of frames currently pending processing.
 @property(assign, nonatomic) int streamingPendingFramesCount;
+@property(assign, nonatomic) int framesStreamingPendingFramesCount;
 @property(assign, nonatomic) BOOL isFirstVideoSample;
 @property(assign, nonatomic) BOOL isRecording;
 @property(assign, nonatomic) BOOL isRecordingPaused;

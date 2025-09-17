@@ -644,6 +644,7 @@ class _CameraExampleHomeState extends State<CameraExampleHome>
       ResolutionPreset.medium,
       enableAudio: enableAudio,
       imageFormatGroup: ImageFormatGroup.bgra8888,
+      frameFps: 2,
     );
 
     controller = cameraController;
@@ -1042,6 +1043,18 @@ class _CameraExampleHomeState extends State<CameraExampleHome>
 
       print('caputureJpeg requested');
       await CameraPlatform.instance.capturePreviewFrameJpeg(filePath);
+
+      var lastTime = DateTime.now();
+      cameraController.startFrameStream((frame) {
+        var now = DateTime.now();
+        var diff = now.difference(lastTime).inMilliseconds;
+        print('frame stream ${diff} ms');
+        lastTime = now;
+      });
+
+      Future.delayed(const Duration(seconds: 5), () {
+        cameraController.stopFrameStream();
+      });
 
       print('caputureJpeg took ${sw1p.elapsedMilliseconds} ms ${file.path}');
       sw1p.reset();

@@ -98,6 +98,7 @@ class PlatformMediaSettings {
   PlatformMediaSettings({
     required this.resolutionPreset,
     required this.framesPerSecond,
+    required this.frameFps,
     required this.videoBitrate,
     required this.audioBitrate,
     required this.enableAudio,
@@ -105,6 +106,7 @@ class PlatformMediaSettings {
 
   final PlatformResolutionPreset resolutionPreset;
   final int? framesPerSecond;
+  final int? frameFps;
   final int? videoBitrate;
   final int? audioBitrate;
   final bool enableAudio;
@@ -160,6 +162,21 @@ abstract class CameraApi {
   /// This is used to throttle sending frames across the channel.
   @async
   void receivedImageStreamData();
+
+  /// Called by the Dart side of the plugin when it has received the last image
+  /// frame sent.
+  ///
+  /// This is used to throttle sending frames across the channel.
+  @async
+  void receivedFrameStreamData();
+
+  /// Begins streaming frames from the camera.
+  @async
+  void startFrameStream();
+
+  /// Stops streaming frames from the camera.
+  @async
+  void stopFrameStream();
 
   /// Indicates that the given camera is no longer being used on the Dart side,
   /// and any associated resources can be cleaned up.

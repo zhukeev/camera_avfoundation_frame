@@ -29,6 +29,15 @@ final class LastFrameStore {
     /// Whether to copy `Data` objects when producing the Flutter map.
     var copyBytesForCallback: Bool = true
 
+    func setOnFrameListener(copyBytes: Bool, _ listener: (([String: Any]) -> Void)?) {
+        self.copyBytesForCallback = copyBytes
+        self.onFrameListener = listener
+    }
+
+    func clearOnFrameListener() {
+        self.onFrameListener = nil
+    }
+
     // You can still update these, but we do NOT embed EXIF anymore.
     var metaAperture: Double?
     var metaExposureTimeNs: Int64?
@@ -41,6 +50,16 @@ final class LastFrameStore {
 
     /// Throttling between accepts (nanoseconds). 10ms by default.
     var defaultMinIntervalNs: UInt64 = 10_000_000
+
+    func setFrameFps(_ fps: Int?) { 
+        if let v = fps, v > 0 {
+            defaultMinIntervalNs = UInt64(1_000_000_000) / UInt64(v)
+        } else {
+            defaultMinIntervalNs = 0
+        }
+        lastAcceptTsNs = 0
+    }
+
 
     // MARK: - Accept a sample buffer and cache a tightly packed copy
 
@@ -166,6 +185,10 @@ final class LastFrameStore {
                 "width": f.width,
                 "height": f.height,
                 "planes": [yPlane, uvPlane],
+                "lensAperture": metaAperture as Any,
+                "sensorExposureTime": metaExposureTimeNs as Any,
+                "sensorSensitivity": metaIso as Any,
+                "timestampNs": Int64(bitPattern: f.tsNs),
             ]
 
         case let .bgra(bytes, bytesPerRow):
@@ -180,6 +203,10 @@ final class LastFrameStore {
                 "format": Int(kCVPixelFormatType_32BGRA),
                 "width": f.width, "height": f.height,
                 "planes": [plane],
+                "lensAperture": metaAperture as Any,
+                "sensorExposureTime": metaExposureTimeNs as Any,
+                "sensorSensitivity": metaIso as Any,
+                "timestampNs": Int64(bitPattern: f.tsNs),
             ]
         }
     }

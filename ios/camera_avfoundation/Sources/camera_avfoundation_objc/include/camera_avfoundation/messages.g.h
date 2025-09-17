@@ -156,11 +156,13 @@ typedef NS_ENUM(NSUInteger, FCPPlatformResolutionPreset) {
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)makeWithResolutionPreset:(FCPPlatformResolutionPreset)resolutionPreset
     framesPerSecond:(nullable NSNumber *)framesPerSecond
+    frameFps:(nullable NSNumber *)frameFps
     videoBitrate:(nullable NSNumber *)videoBitrate
     audioBitrate:(nullable NSNumber *)audioBitrate
     enableAudio:(BOOL )enableAudio;
 @property(nonatomic, assign) FCPPlatformResolutionPreset resolutionPreset;
 @property(nonatomic, strong, nullable) NSNumber * framesPerSecond;
+@property(nonatomic, strong, nullable) NSNumber * frameFps;
 @property(nonatomic, strong, nullable) NSNumber * videoBitrate;
 @property(nonatomic, strong, nullable) NSNumber * audioBitrate;
 @property(nonatomic, assign) BOOL  enableAudio;
@@ -203,6 +205,15 @@ NSObject<FlutterMessageCodec> *FCPGetMessagesCodec(void);
 ///
 /// This is used to throttle sending frames across the channel.
 - (void)receivedImageStreamDataWithCompletion:(void (^)(FlutterError *_Nullable))completion;
+/// Called by the Dart side of the plugin when it has received the last image
+/// frame sent.
+///
+/// This is used to throttle sending frames across the channel.
+- (void)receivedFrameStreamDataWithCompletion:(void (^)(FlutterError *_Nullable))completion;
+/// Begins streaming frames from the camera.
+- (void)startFrameStreamWithCompletion:(void (^)(FlutterError *_Nullable))completion;
+/// Stops streaming frames from the camera.
+- (void)stopFrameStreamWithCompletion:(void (^)(FlutterError *_Nullable))completion;
 /// Indicates that the given camera is no longer being used on the Dart side,
 /// and any associated resources can be cleaned up.
 - (void)disposeCamera:(NSInteger)cameraId completion:(void (^)(FlutterError *_Nullable))completion;
