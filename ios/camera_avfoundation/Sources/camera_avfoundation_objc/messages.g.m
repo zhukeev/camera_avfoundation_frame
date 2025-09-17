@@ -213,12 +213,14 @@ static id GetNullableObjectAtIndex(NSArray<id> *array, NSInteger key) {
 @implementation FCPPlatformMediaSettings
 + (instancetype)makeWithResolutionPreset:(FCPPlatformResolutionPreset)resolutionPreset
     framesPerSecond:(nullable NSNumber *)framesPerSecond
+    frameFps:(nullable NSNumber *)frameFps
     videoBitrate:(nullable NSNumber *)videoBitrate
     audioBitrate:(nullable NSNumber *)audioBitrate
     enableAudio:(BOOL )enableAudio {
   FCPPlatformMediaSettings* pigeonResult = [[FCPPlatformMediaSettings alloc] init];
   pigeonResult.resolutionPreset = resolutionPreset;
   pigeonResult.framesPerSecond = framesPerSecond;
+  pigeonResult.frameFps = frameFps;
   pigeonResult.videoBitrate = videoBitrate;
   pigeonResult.audioBitrate = audioBitrate;
   pigeonResult.enableAudio = enableAudio;
@@ -229,9 +231,10 @@ static id GetNullableObjectAtIndex(NSArray<id> *array, NSInteger key) {
   FCPPlatformResolutionPresetBox *boxedFCPPlatformResolutionPreset = GetNullableObjectAtIndex(list, 0);
   pigeonResult.resolutionPreset = boxedFCPPlatformResolutionPreset.value;
   pigeonResult.framesPerSecond = GetNullableObjectAtIndex(list, 1);
-  pigeonResult.videoBitrate = GetNullableObjectAtIndex(list, 2);
-  pigeonResult.audioBitrate = GetNullableObjectAtIndex(list, 3);
-  pigeonResult.enableAudio = [GetNullableObjectAtIndex(list, 4) boolValue];
+  pigeonResult.frameFps = GetNullableObjectAtIndex(list, 2);
+  pigeonResult.videoBitrate = GetNullableObjectAtIndex(list, 3);
+  pigeonResult.audioBitrate = GetNullableObjectAtIndex(list, 4);
+  pigeonResult.enableAudio = [GetNullableObjectAtIndex(list, 5) boolValue];
   return pigeonResult;
 }
 + (nullable FCPPlatformMediaSettings *)nullableFromList:(NSArray<id> *)list {
@@ -241,6 +244,7 @@ static id GetNullableObjectAtIndex(NSArray<id> *array, NSInteger key) {
   return @[
     [[FCPPlatformResolutionPresetBox alloc] initWithValue:self.resolutionPreset],
     self.framesPerSecond ?: [NSNull null],
+    self.frameFps ?: [NSNull null],
     self.videoBitrate ?: [NSNull null],
     self.audioBitrate ?: [NSNull null],
     @(self.enableAudio),
@@ -545,6 +549,63 @@ void SetUpFCPCameraApiWithSuffix(id<FlutterBinaryMessenger> binaryMessenger, NSO
       NSCAssert([api respondsToSelector:@selector(receivedImageStreamDataWithCompletion:)], @"FCPCameraApi api (%@) doesn't respond to @selector(receivedImageStreamDataWithCompletion:)", api);
       [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
         [api receivedImageStreamDataWithCompletion:^(FlutterError *_Nullable error) {
+          callback(wrapResult(nil, error));
+        }];
+      }];
+    } else {
+      [channel setMessageHandler:nil];
+    }
+  }
+  /// Called by the Dart side of the plugin when it has received the last image
+  /// frame sent.
+  ///
+  /// This is used to throttle sending frames across the channel.
+  {
+    FlutterBasicMessageChannel *channel =
+      [[FlutterBasicMessageChannel alloc]
+        initWithName:[NSString stringWithFormat:@"%@%@", @"dev.flutter.pigeon.camera_avfoundation_frame.CameraApi.receivedFrameStreamData", messageChannelSuffix]
+        binaryMessenger:binaryMessenger
+        codec:FCPGetMessagesCodec()];
+    if (api) {
+      NSCAssert([api respondsToSelector:@selector(receivedFrameStreamDataWithCompletion:)], @"FCPCameraApi api (%@) doesn't respond to @selector(receivedFrameStreamDataWithCompletion:)", api);
+      [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
+        [api receivedFrameStreamDataWithCompletion:^(FlutterError *_Nullable error) {
+          callback(wrapResult(nil, error));
+        }];
+      }];
+    } else {
+      [channel setMessageHandler:nil];
+    }
+  }
+  /// Begins streaming frames from the camera.
+  {
+    FlutterBasicMessageChannel *channel =
+      [[FlutterBasicMessageChannel alloc]
+        initWithName:[NSString stringWithFormat:@"%@%@", @"dev.flutter.pigeon.camera_avfoundation_frame.CameraApi.startFrameStream", messageChannelSuffix]
+        binaryMessenger:binaryMessenger
+        codec:FCPGetMessagesCodec()];
+    if (api) {
+      NSCAssert([api respondsToSelector:@selector(startFrameStreamWithCompletion:)], @"FCPCameraApi api (%@) doesn't respond to @selector(startFrameStreamWithCompletion:)", api);
+      [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
+        [api startFrameStreamWithCompletion:^(FlutterError *_Nullable error) {
+          callback(wrapResult(nil, error));
+        }];
+      }];
+    } else {
+      [channel setMessageHandler:nil];
+    }
+  }
+  /// Stops streaming frames from the camera.
+  {
+    FlutterBasicMessageChannel *channel =
+      [[FlutterBasicMessageChannel alloc]
+        initWithName:[NSString stringWithFormat:@"%@%@", @"dev.flutter.pigeon.camera_avfoundation_frame.CameraApi.stopFrameStream", messageChannelSuffix]
+        binaryMessenger:binaryMessenger
+        codec:FCPGetMessagesCodec()];
+    if (api) {
+      NSCAssert([api respondsToSelector:@selector(stopFrameStreamWithCompletion:)], @"FCPCameraApi api (%@) doesn't respond to @selector(stopFrameStreamWithCompletion:)", api);
+      [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
+        [api stopFrameStreamWithCompletion:^(FlutterError *_Nullable error) {
           callback(wrapResult(nil, error));
         }];
       }];

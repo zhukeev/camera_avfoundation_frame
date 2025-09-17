@@ -57,8 +57,14 @@ class AVFoundationCamera extends CameraPlatform {
   // The stream to receive frames from the native code.
   StreamSubscription<dynamic>? _platformImageStreamSubscription;
 
+  // The stream to receive frames from the native code.
+  StreamSubscription<dynamic>? _platformFramesStreamSubscription;
+
   // The stream for vending frames to platform interface clients.
   StreamController<CameraImageData>? _frameStreamController;
+
+  // [startListenFrames] stream
+  StreamController<CameraImageData>? _framesStreamController;
 
   Stream<CameraEvent> _cameraEvents(int cameraId) =>
       cameraEventStreamController.stream
@@ -100,6 +106,7 @@ class AVFoundationCamera extends CameraPlatform {
             mediaSettings?.resolutionPreset,
           ),
           framesPerSecond: mediaSettings?.fps,
+          frameFps: mediaSettings?.frameFps,
           videoBitrate: mediaSettings?.videoBitrate,
           audioBitrate: mediaSettings?.audioBitrate,
           enableAudio: mediaSettings?.enableAudio ?? true,
@@ -238,6 +245,14 @@ class AVFoundationCamera extends CameraPlatform {
   }
 
   @override
+  Stream<CameraImageData> onStreamedFramesAvailable() {
+    _framesStreamController = _createFramesStreamController(
+      onListen: _onFramesStreamListen,
+    );
+    return _framesStreamController!.stream;
+  }
+
+  @override
   Future<void> prepareForVideoRecording() async {
     await _hostApi.prepareForVideoRecording();
   }
@@ -304,8 +319,28 @@ class AVFoundationCamera extends CameraPlatform {
     );
   }
 
+  StreamController<CameraImageData> _createFramesStreamController({
+    void Function()? onListen,
+  }) {
+    return StreamController<CameraImageData>(
+      onListen: onListen ?? () {},
+      onPause: _onFramesStreamPauseResume,
+      onResume: _onFramesStreamPauseResume,
+      onCancel: _onFramesStreamCancel,
+    );
+  }
+
   void _onFrameStreamListen() {
     _startPlatformStream();
+  }
+
+  void _onFramesStreamListen() {
+    _startFramesStream();
+  }
+
+  Future<void> _startFramesStream() async {
+    await _hostApi.startFrameStream();
+    _startFrameStreamListener();
   }
 
   Future<void> _startPlatformStream() async {
@@ -330,11 +365,43 @@ class AVFoundationCamera extends CameraPlatform {
     });
   }
 
+  void _startFrameStreamListener() {
+    const EventChannel cameraEventChannel = EventChannel(
+      'plugins.flutter.io/camera_avfoundation/framesStream',
+    );
+    _platformFramesStreamSubscription =
+        cameraEventChannel.receiveBroadcastStream().listen((dynamic imageData) {
+      try {
+        _hostApi.receivedFrameStreamData();
+      } on PlatformException catch (e) {
+        throw CameraException(e.code, e.message);
+      }
+      _framesStreamController!.add(
+        cameraImageFromPlatformData(imageData as Map<dynamic, dynamic>),
+      );
+    });
+  }
+
   FutureOr<void> _onFrameStreamCancel() async {
     await _hostApi.stopImageStream();
     await _platformImageStreamSubscription?.cancel();
     _platformImageStreamSubscription = null;
-    _frameStreamController = null;
+    _framesStreamController = null;
+  }
+
+  FutureOr<void> _onFramesStreamCancel() async {
+    await _hostApi.stopFrameStream();
+    await _platformFramesStreamSubscription?.cancel();
+    _platformFramesStreamSubscription = null;
+    _framesStreamController?.close();
+    _framesStreamController = null;
+  }
+
+  void _onFramesStreamPauseResume() {
+    throw CameraException(
+      'InvalidCall',
+      'Pause and resume are not supported for onStreamedFramesAvailable',
+    );
   }
 
   void _onFrameStreamPauseResume() {

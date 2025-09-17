@@ -332,6 +332,30 @@ extension CameraPlugin: FCPCameraApi {
     }
   }
 
+  public func startFrameStream(completion: @escaping (FlutterError?) -> Void) {
+    captureSessionQueue.async { [weak self] in
+      guard let strongSelf = self else {
+        completion(nil)
+        return
+      }
+      strongSelf.camera?.startFrameStream(with: strongSelf.messenger, completion: completion)
+    }
+  }
+
+  public func stopFrameStream(completion: @escaping (FlutterError?) -> Void) {
+    captureSessionQueue.async { [weak self] in
+      self?.camera?.stopFrameStream()
+      completion(nil)
+    }
+  }
+
+  public func receivedFrameStreamData(completion: @escaping (FlutterError?) -> Void) {
+    captureSessionQueue.async { [weak self] in
+      self?.camera?.receivedFrameStreamData()
+      completion(nil)
+    }
+  }
+
   public func disposeCamera(_ cameraId: Int, completion: @escaping (FlutterError?) -> Void) {
     registry.unregisterTexture(Int64(cameraId))
     captureSessionQueue.async { [weak self] in

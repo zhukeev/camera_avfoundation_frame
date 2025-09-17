@@ -27,6 +27,8 @@ protocol Camera: FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate,
   var isPreviewPaused: Bool { get }
   var isStreamingImages: Bool { get }
 
+  var isStreamingFrames: Bool { get }
+
   var deviceOrientation: UIDeviceOrientation { get set }
 
   var minimumAvailableZoomFactor: CGFloat { get }
@@ -44,6 +46,12 @@ protocol Camera: FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate,
   /// This should be called each time a frame is received. Failing to call it may
   /// cause later frames to be dropped instead of streamed.
   func receivedImageStreamData()
+
+  /// Acknowledges the receipt of one frames stream frame.
+  ///
+  /// This should be called each time a frame is received. Failing to call it may
+  /// cause later frames to be dropped instead of streamed.
+  func receivedFrameStreamData()
 
   func start()
   func stop()
@@ -132,6 +140,10 @@ protocol Camera: FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate,
   func startImageStream(
     with: FlutterBinaryMessenger, completion: @escaping (_ error: FlutterError?) -> Void)
   func stopImageStream()
+
+  func startFrameStream(
+    with: FlutterBinaryMessenger, completion: @escaping (_ error: FlutterError?) -> Void)
+  func stopFrameStream()
 
   // Override to make `AVCaptureVideoDataOutputSampleBufferDelegate`/
   // `AVCaptureAudioDataOutputSampleBufferDelegate` method non optional

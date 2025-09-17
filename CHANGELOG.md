@@ -1,3 +1,9 @@
+## 0.9.20+12
+
+* updated camera_platform_interface_frame to ^2.10.12
+* support `frameFps`
+* support `startFrameStream` and `stopFrameStream`
+
 ## 0.9.20+11
 
 * updated camera_avfoundation to ^0.9.21+2
